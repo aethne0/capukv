@@ -1,0 +1,281 @@
+syntax = "proto3";
+
+package capukv;
+
+/* *****************************************************************************
+Local
+***************************************************************************** */
+message LocalEntry {
+  string id = 1;
+  uint64 term = 2;
+  optional string voted_for = 3;
+}
+
+/* *****************************************************************************
+Raft
+***************************************************************************** */
+service RaftService {
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse) {}
+  rpc RequestVote(VoteRequest) returns (VoteResponse) {}
+}
+
+message AppendEntriesRequest {
+  uint64 req_id = 1;
+
+  uint64 term = 2;
+  string leader_id = 3;
+  string follower_id = 8;
+  uint64 prev_log_index = 4;
+  uint64 prev_log_term = 5;
+  uint64 leader_commit = 6;
+  repeated LogEntry entries = 7;
+
+  string leader_client_uri = 9;
+}
+
+message AppendEntriesResponse {
+  uint64 term = 1;
+  bool success = 2;
+
+  // replicated from request
+  uint64 req_id = 3;
+  // replicated from request
+  string leader_id = 8;
+  // recipient id, replicated from request
+  string follower_id = 10;
+
+  // replicated from request
+  uint64 prev_log_index = 4;
+  // replicated from request
+  uint64 prev_log_term = 5;
+  // replicated from request
+  uint64 leader_commit = 6;
+  // index of first entry that was sent (0 if none sent)
+  uint64 first_entry_index = 7;
+  // index of last entry that was sent (0 if none sent)
+  uint64 entries_len = 9;
+}
+
+message VoteRequest {
+  uint64 req_id = 1;
+
+  uint64 term = 2;
+  string candidate_id = 3;
+  uint64 last_log_index = 4;
+  uint64 last_log_term = 5;
+
+  string leader_client_uri = 6;
+}
+
+message VoteResponse {
+  uint64 req_id = 1;
+
+  uint64 term = 2;
+  bool vote_granted = 3;
+  string from_id = 4;
+}
+
+/* *****************************************************************************
+State
+***************************************************************************** */
+
+// ! If new operation is added:
+// 1. add to "proto_util.rs" to get helper impls
+// 2. add grpc endpoint in "api.rs"
+// 3. add state-machine methods ("state_machine.rs")
+
+service ApiService {
+  rpc CreateKeyspace(CreateKeyspaceReq) returns (CreateKeyspaceResp) {}
+  rpc DeleteKeyspace(DeleteKeyspaceReq) returns (DeleteKeyspaceResp) {}
+  rpc ListKeyspaces(ListKeyspacesReq) returns (ListKeyspacesResp) {}
+
+  rpc CreateSnapshot(CreateSnapshotReq) returns (CreateSnapshotResp) {}
+  rpc ListSnapshots(ListSnapshotsReq) returns (ListSnapshotsResp) {}
+  rpc DeleteSnapshot(DeleteSnapshotReq) returns (DeleteSnapshotResp) {}
+  rpc PurgeSnapshots(PurgeSnapshotsReq) returns (PurgeSnapshotsResp) {}
+
+  rpc Get(GetReq) returns (GetResp) {}
+  rpc GetRange(GetRangeReq) returns (GetRangeResp) {}
+  rpc GetBatch(GetBatchReq) returns (GetBatchResp) {}
+
+  rpc Insert(InsertReq) returns (InsertResp) {}
+  rpc InsertBatch(InsertBatchReq) returns (InsertBatchResp) {}
+  rpc InsertBatchCas(InsertBatchCasReq) returns (InsertBatchCasResp) {}
+
+  rpc Delete(DeleteReq) returns (DeleteResp) {}
+  rpc DeleteRange(DeleteRangeReq) returns (DeleteRangeResp) {}
+  rpc DeleteBatch(DeleteBatchReq) returns (DeleteBatchResp) {}
+}
+
+message Pair {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+// Requests
+
+message CreateKeyspaceReq {}
+message DeleteKeyspaceReq { uint64 keyspace = 1; }
+message ListKeyspacesReq {}
+
+message CreateSnapshotReq { uint64 keyspace = 1; }
+message ListSnapshotsReq { uint64 keyspace = 1; }
+message DeleteSnapshotReq {
+  uint64 keyspace = 1;
+  uint64 snapshot = 2;
+}
+message PurgeSnapshotsReq { uint64 keyspace = 1; }
+
+message GetReq {
+  uint64 keyspace = 1;
+  optional uint64 snapshot = 2;
+  bytes key = 3;
+}
+message GetRangeReq {
+  uint64 keyspace = 1;
+  optional uint64 snapshot = 2;
+  bytes start_key = 3;
+  bytes end_key = 4;
+}
+message GetBatchReq {
+  uint64 keyspace = 1;
+  optional uint64 snapshot = 2;
+  repeated bytes keys = 3;
+}
+
+message InsertReq {
+  uint64 keyspace = 1;
+  bytes key = 2;
+  bytes value = 3;
+}
+message InsertBatchReq {
+  uint64 keyspace = 1;
+  repeated Pair pairs = 2;
+}
+message InsertBatchCasReq {
+  uint64 keyspace = 1;
+  uint64 snapshot = 2;
+  repeated Pair pairs = 3;
+}
+
+message DeleteReq {
+  uint64 keyspace = 1;
+  bytes key = 2;
+}
+message DeleteRangeReq {
+  uint64 keyspace = 1;
+  bytes start_key = 2;
+  bytes end_key = 3;
+}
+message DeleteBatchReq {
+  uint64 keyspace = 1;
+  repeated bytes keys = 2;
+}
+
+// Responses
+
+message CreateKeyspaceResp { uint64 keyspace = 1; }
+message DeleteKeyspaceResp {}
+message ListKeyspacesResp { repeated uint64 keyspaces = 1; }
+
+message CreateSnapshotResp { uint64 snapshot = 1; }
+message ListSnapshotsResp { repeated uint64 snapshots = 1; }
+message DeleteSnapshotResp {}
+message PurgeSnapshotsResp { uint64 count = 1; }
+
+message GetResp { optional bytes value = 1; }
+message GetRangeResp { repeated Pair pairs = 1; }
+message GetBatchResp { repeated Pair pairs = 1; }
+
+message InsertResp { optional bytes old_value = 1; }
+message InsertBatchResp { repeated Pair old_pairs = 1; }
+message InsertBatchCasResp { repeated Pair old_pairs = 1; }
+
+message DeleteResp { optional bytes old_value = 1; }
+message DeleteRangeResp { repeated Pair old_pairs = 1; }
+message DeleteBatchResp { repeated Pair old_pairs = 1; }
+
+// Log
+
+message LogEntry {
+  uint64 term = 1;
+  uint64 index = 2;
+  WriteOp op = 3;
+}
+
+// Api stuff
+
+message ReadOp {
+  oneof read_op {
+    ListKeyspacesReq list_keyspaces_req = 1;
+    ListSnapshotsReq list_snapshots_req = 2;
+    GetReq get_req = 3;
+    GetBatchReq get_batch_req = 4;
+    GetRangeReq get_range_req = 5;
+  }
+}
+
+message ReadOk {
+  oneof read_ok {
+    ListKeyspacesResp list_keyspaces_resp = 1;
+    ListSnapshotsResp list_snapshots_resp = 2;
+    GetResp get_resp = 3;
+    GetBatchResp get_batch_resp = 4;
+    GetRangeResp get_range_resp = 5;
+  }
+}
+
+message ReadResp {
+  oneof read_resp {
+    ReadOk ok = 1;
+    Err err = 2;
+  }
+}
+
+message WriteOp {
+  oneof write_op {
+    CreateKeyspaceReq create_keyspace_req = 1;
+    DeleteKeyspaceReq delete_keyspace_req = 2;
+    CreateSnapshotReq create_snapshot_req = 3;
+    DeleteSnapshotReq delete_snapshot_req = 4;
+    PurgeSnapshotsReq purge_snapshots_req = 5;
+    InsertReq insert_req = 6;
+    InsertBatchReq insert_batch_req = 7;
+    InsertBatchCasReq insert_batch_cas_req = 11;
+    DeleteReq delete_req = 8;
+    DeleteRangeReq delete_range_req = 9;
+    DeleteBatchReq delete_batch_req = 10;
+  }
+}
+
+message WriteOk {
+  oneof write_ok {
+    CreateKeyspaceResp create_keyspace_resp = 1;
+    DeleteKeyspaceResp delete_keyspace_resp = 2;
+    CreateSnapshotResp create_snapshot_resp = 3;
+    DeleteSnapshotResp delete_snapshot_resp = 4;
+    PurgeSnapshotsResp purge_snapshots_resp = 5;
+    InsertResp insert_resp = 6;
+    InsertBatchResp insert_batch_resp = 7;
+    InsertBatchCasResp insert_batch_cas_resp = 11;
+    DeleteResp delete_resp = 8;
+    DeleteRangeResp delete_range_resp = 9;
+    DeleteBatchResp delete_batch_resp = 10;
+  }
+}
+
+message WriteResp {
+  oneof write_resp {
+    WriteOk ok = 1;
+    Err err = 2;
+  }
+}
+
+// These are state-machine level errors (eg. "keyspace not existing")
+// These do not include raft-level errors (eg. "not-leader")
+// These do not include grpc-level errors (eg. "transport", "internal")
+enum Err {
+  KEYSPACE_NOT_FOUND = 0;
+  SNAPSHOT_NOT_FOUND = 1;
+  CAS_FAILURE = 2;
+}
