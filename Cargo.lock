@@ -204,6 +204,7 @@ dependencies = [
 name = "capukv"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
  "fjall",
  "im",
@@ -1663,6 +1664,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62fc7c4ce161f049607ecea654dca3f2d727da5371ae85e2e4f14ce2b98ed67c"
 dependencies = [
  "byteorder",
+ "bytes",
  "byteview",
  "interval-heap",
  "log",

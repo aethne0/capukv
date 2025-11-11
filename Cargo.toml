@@ -13,23 +13,18 @@ monke = { git = "https://github.com/aethne0/monke-util", branch = "master" }
 prost = "0.14.1"
 tonic = "0.14.2"
 tonic-prost = "0.14.2"
-tokio = { version = "1.47.1", features = [
-    "bytes",
-    "fs",
-    "macros",
-    "rt-multi-thread",
-    "signal",
-] }
+tokio = { version = "1.47.1", features = ["bytes", "fs", "macros", "rt-multi-thread", "signal"] }
 clap = { version = "4.5.51", features = ["derive"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
-fjall = "2.11.2"
+fjall = { version = "2.11.2", features = ["bytes"] }
 im = "15.1.0"
 rust-rocksdb = { version = "0.44.2", features = ["jemalloc"] }
 uuid = { version = "1.18.1", features = ["v4", "v7"] }
 rustc-hash = "2.1.1"
 paste = "1.0.15"
 rand = "0.9.2"
+bytes = "1.10.1"
 
 
 [build-dependencies]

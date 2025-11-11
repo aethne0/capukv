@@ -1,9 +1,19 @@
 #[derive(Debug, Clone)]
 pub enum RaftResponseError {
-    Fail { msg: String },
+    /// This is a catchall failure for "you cant do anything about this its just internally cooked"
+    Fail {
+        msg: String,
+    },
     Timeout,
     NotReady,
-    NotLeader { uri: String },
+    NotLeader {
+        uri: String,
+    },
+    /// There was some state change and the reply channel got purged -
+    /// for example node became follower before it could handle req
+    ///
+    /// Note: This may not mean the operation didn't happen (i have to check still)
+    OperationCancelled,
 }
 
 #[derive(Debug)]

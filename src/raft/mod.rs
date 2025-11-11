@@ -102,7 +102,7 @@ impl Raft {
     /// Client write
     pub(crate) async fn submit_write_op(
         &self, write_op: proto::WriteOp,
-    ) -> oneshot::Receiver<Result<proto::WriteResp, RaftResponseError>> {
+    ) -> Result<proto::WriteResp, RaftResponseError> {
         tracing::debug!("WriteOp: {:?}", &write_op);
         let (tx, rx) = oneshot::channel();
         if let Err(e) = self
@@ -114,13 +114,12 @@ impl Raft {
             panic!("Raft msg-channel closed | {:?}", e);
         }
 
-        rx
+        let rx_res = rx.await.map_err(|_e| RaftResponseError::OperationCancelled);
+        rx_res?
     }
 
     /// Client linear read
-    pub(crate) async fn submit_read_op(
-        &self, read_op: proto::ReadOp,
-    ) -> oneshot::Receiver<Result<proto::ReadResp, RaftResponseError>> {
+    pub(crate) async fn submit_read_op(&self, read_op: proto::ReadOp) -> Result<proto::ReadResp, RaftResponseError> {
         tracing::debug!("ReadOp: {:?}", &read_op);
         let (tx, rx) = oneshot::channel();
         if let Err(e) = self
@@ -132,6 +131,7 @@ impl Raft {
             panic!("Raft msg-channel closed | {:?}", e);
         }
 
-        rx
+        let rx_res = rx.await.map_err(|_e| RaftResponseError::OperationCancelled);
+        rx_res?
     }
 }
