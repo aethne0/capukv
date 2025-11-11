@@ -7,8 +7,8 @@ import uuid
 def run(s): 
     subprocess.run(s, shell=True, check=True)
 
-def without(arr, exclude_index):
-    return ",".join(s for i, s in enumerate(arr) if i != exclude_index)
+def haha(arr, exclude_index):
+    return ",".join(s for i, s in enumerate(arr))
 
 run("rm -rf /tmp/capukv-temp-x*")
 
@@ -33,13 +33,13 @@ print("->", window_name)
 run(f'tmux new-window -n "{window_name}" -d')
 # start first pane in the new window
 path = f'/tmp/capukv-temp-x{0}'
-run(f'tmux send-keys -t "{window_name}.0" "cargo run --bin capukv {rel} -- --dir {path} --id {peer_ids[0]} --port {starting_port} --api-port {starting_port+count} --peers {without(peer_uris, 0)} --peer-ids {without(peer_ids, 0)}" C-m')
+run(f'tmux send-keys -t "{window_name}.0" "cargo run --bin capukv {rel} -- --dir {path} --id {peer_ids[0]} --port {starting_port} --api-port {starting_port+count} --peers {haha(peer_uris, 0)} --peer-ids {haha(peer_ids, 0)}" C-m')
 
 for i, port in enumerate(peer_ports[1:], start=1):
     target_pane = i - 1
     our_id = peer_ids[i]
-    current_peers =  without(peer_uris, i)
-    current_ids =  without(peer_ids, i)
+    current_peers =  haha(peer_uris, i)
+    current_ids =  haha(peer_ids, i)
     http_port = http_ports[i]
 
     # odd index -> horizontal split, even -> vertical split

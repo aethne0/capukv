@@ -63,6 +63,7 @@ fn main() -> Result<(), capukv::Error> {
         .unwrap_or(vec![])
         .into_iter()
         .zip(args.peer_ids.unwrap_or(vec![]))
+        .filter(|(_, id)| *id != args.id)
         .map(|(uri, id)| {
             // We convert the id from String->Uuid->String to ensure its a valid Uuid and that its
             // in canonical form. User can include/not-include the hyphens etc.
