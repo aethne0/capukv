@@ -182,16 +182,21 @@ impl Inner {
                     proto::InsertBatchResp { old_pairs }.into()
                 }
 
-                InsertBatchCasReq(proto::InsertBatchCasReq { snapshot, pairs }) => {
+                InsertBatchCasReq(proto::InsertBatchCasReq { snapshot, pairs: written_pairs }) => {
                     match self.snapshots.get(&snapshot) {
                         None => proto::Err::SnapshotNotFound.into(),
-                        Some(ss) => match ss.read_keys.iter().any(|k| ss.store.get(k) != self.store.get(k)) {
+                        Some(ss) => match ss.read_keys.iter().any(|k| ss.store.get(k) != self.store.get(k))
+                            || written_pairs
+                                .iter()
+                                .map(|proto::Pair { key, .. }| key)
+                                .any(|k| ss.store.get(k) != self.store.get(k))
+                        {
                             // if snapshot read-basis was violated
                             true => proto::Err::CasFailure.into(),
                             // otherwise we can write
                             false => {
                                 let mut old_pairs = vec![];
-                                for proto::Pair { key, value } in pairs {
+                                for proto::Pair { key, value } in written_pairs {
                                     if let Some(old) = self.store.insert(key.clone(), value) {
                                         old_pairs.push(proto::Pair { key, value: old });
                                     }
