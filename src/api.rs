@@ -22,7 +22,6 @@ use crate::{proto, raft::Raft};
 impl From<proto::Err> for tonic::Status {
     fn from(value: proto::Err) -> Self {
         match value {
-            proto::Err::KeyspaceNotFound => tonic::Status::not_found("Keyspace".to_string()),
             proto::Err::SnapshotNotFound => tonic::Status::not_found("Snapshot".to_string()),
             proto::Err::CasFailure => tonic::Status::aborted("CAS basis failure"),
         }
@@ -103,35 +102,11 @@ impl proto::api_service_server::ApiService for Arc<Raft> {
         Ok(res.into())
     }
 
-    async fn list_keyspaces(
-        &self, req: tonic::Request<proto::ListKeyspacesReq>,
-    ) -> tonic::Result<tonic::Response<proto::ListKeyspacesResp>> {
-        let (_, _, req) = req.into_parts();
-        let res: proto::ListKeyspacesResp = recv_read(self.submit_read_op(req.into())).await?.into();
-        Ok(res.into())
-    }
-
     async fn list_snapshots(
         &self, req: tonic::Request<proto::ListSnapshotsReq>,
     ) -> tonic::Result<tonic::Response<proto::ListSnapshotsResp>> {
         let (_, _, req) = req.into_parts();
         let res: proto::ListSnapshotsResp = recv_read(self.submit_read_op(req.into())).await?.into();
-        Ok(res.into())
-    }
-
-    async fn create_keyspace(
-        &self, req: tonic::Request<proto::CreateKeyspaceReq>,
-    ) -> tonic::Result<tonic::Response<proto::CreateKeyspaceResp>> {
-        let (_, _, req) = req.into_parts();
-        let res: proto::CreateKeyspaceResp = recv_write(self.submit_write_op(req.into())).await?.into();
-        Ok(res.into())
-    }
-
-    async fn delete_keyspace(
-        &self, req: tonic::Request<proto::DeleteKeyspaceReq>,
-    ) -> tonic::Result<tonic::Response<proto::DeleteKeyspaceResp>> {
-        let (_, _, req) = req.into_parts();
-        let res: proto::DeleteKeyspaceResp = recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 

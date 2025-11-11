@@ -85,10 +85,6 @@ State
 // 3. add state-machine methods ("state_machine.rs")
 
 service ApiService {
-  rpc CreateKeyspace(CreateKeyspaceReq) returns (CreateKeyspaceResp) {}
-  rpc DeleteKeyspace(DeleteKeyspaceReq) returns (DeleteKeyspaceResp) {}
-  rpc ListKeyspaces(ListKeyspacesReq) returns (ListKeyspacesResp) {}
-
   rpc CreateSnapshot(CreateSnapshotReq) returns (CreateSnapshotResp) {}
   rpc ListSnapshots(ListSnapshotsReq) returns (ListSnapshotsResp) {}
   rpc DeleteSnapshot(DeleteSnapshotReq) returns (DeleteSnapshotResp) {}
@@ -114,69 +110,43 @@ message Pair {
 
 // Requests
 
-message CreateKeyspaceReq {}
-message DeleteKeyspaceReq { uint64 keyspace = 1; }
-message ListKeyspacesReq {}
-
-message CreateSnapshotReq { uint64 keyspace = 1; }
-message ListSnapshotsReq { uint64 keyspace = 1; }
-message DeleteSnapshotReq {
-  uint64 keyspace = 1;
-  uint64 snapshot = 2;
-}
-message PurgeSnapshotsReq { uint64 keyspace = 1; }
+message CreateSnapshotReq {}
+message ListSnapshotsReq {}
+message DeleteSnapshotReq { uint64 snapshot = 2; }
+message PurgeSnapshotsReq {}
 
 message GetReq {
-  uint64 keyspace = 1;
   optional uint64 snapshot = 2;
   bytes key = 3;
 }
 message GetRangeReq {
-  uint64 keyspace = 1;
   optional uint64 snapshot = 2;
   bytes start_key = 3;
   bytes end_key = 4;
 }
 message GetBatchReq {
-  uint64 keyspace = 1;
   optional uint64 snapshot = 2;
   repeated bytes keys = 3;
 }
 
 message InsertReq {
-  uint64 keyspace = 1;
   bytes key = 2;
   bytes value = 3;
 }
-message InsertBatchReq {
-  uint64 keyspace = 1;
-  repeated Pair pairs = 2;
-}
+message InsertBatchReq { repeated Pair pairs = 2; }
 message InsertBatchCasReq {
-  uint64 keyspace = 1;
   uint64 snapshot = 2;
   repeated Pair pairs = 3;
 }
 
-message DeleteReq {
-  uint64 keyspace = 1;
-  bytes key = 2;
-}
+message DeleteReq { bytes key = 2; }
 message DeleteRangeReq {
-  uint64 keyspace = 1;
   bytes start_key = 2;
   bytes end_key = 3;
 }
-message DeleteBatchReq {
-  uint64 keyspace = 1;
-  repeated bytes keys = 2;
-}
+message DeleteBatchReq { repeated bytes keys = 2; }
 
 // Responses
-
-message CreateKeyspaceResp { uint64 keyspace = 1; }
-message DeleteKeyspaceResp {}
-message ListKeyspacesResp { repeated uint64 keyspaces = 1; }
 
 message CreateSnapshotResp { uint64 snapshot = 1; }
 message ListSnapshotsResp { repeated uint64 snapshots = 1; }
@@ -207,7 +177,6 @@ message LogEntry {
 
 message ReadOp {
   oneof read_op {
-    ListKeyspacesReq list_keyspaces_req = 1;
     ListSnapshotsReq list_snapshots_req = 2;
     GetReq get_req = 3;
     GetBatchReq get_batch_req = 4;
@@ -217,7 +186,6 @@ message ReadOp {
 
 message ReadOk {
   oneof read_ok {
-    ListKeyspacesResp list_keyspaces_resp = 1;
     ListSnapshotsResp list_snapshots_resp = 2;
     GetResp get_resp = 3;
     GetBatchResp get_batch_resp = 4;
@@ -234,8 +202,6 @@ message ReadResp {
 
 message WriteOp {
   oneof write_op {
-    CreateKeyspaceReq create_keyspace_req = 1;
-    DeleteKeyspaceReq delete_keyspace_req = 2;
     CreateSnapshotReq create_snapshot_req = 3;
     DeleteSnapshotReq delete_snapshot_req = 4;
     PurgeSnapshotsReq purge_snapshots_req = 5;
@@ -250,8 +216,6 @@ message WriteOp {
 
 message WriteOk {
   oneof write_ok {
-    CreateKeyspaceResp create_keyspace_resp = 1;
-    DeleteKeyspaceResp delete_keyspace_resp = 2;
     CreateSnapshotResp create_snapshot_resp = 3;
     DeleteSnapshotResp delete_snapshot_resp = 4;
     PurgeSnapshotsResp purge_snapshots_resp = 5;
@@ -271,11 +235,10 @@ message WriteResp {
   }
 }
 
-// These are state-machine level errors (eg. "keyspace not existing")
+// These are state-machine level errors (eg. "snapshot not existing")
 // These do not include raft-level errors (eg. "not-leader")
 // These do not include grpc-level errors (eg. "transport", "internal")
 enum Err {
-  KEYSPACE_NOT_FOUND = 0;
-  SNAPSHOT_NOT_FOUND = 1;
-  CAS_FAILURE = 2;
+  SNAPSHOT_NOT_FOUND = 0;
+  CAS_FAILURE = 1;
 }

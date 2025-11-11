@@ -100,14 +100,11 @@ impl From<Err> for WriteResp {
     }
 }
 
-impl_read_op!(ListKeyspaces);
 impl_read_op!(ListSnapshots);
 impl_read_op!(Get);
 impl_read_op!(GetBatch);
 impl_read_op!(GetRange);
 
-impl_write_op!(CreateKeyspace);
-impl_write_op!(DeleteKeyspace);
 impl_write_op!(CreateSnapshot);
 impl_write_op!(DeleteSnapshot);
 impl_write_op!(PurgeSnapshots);

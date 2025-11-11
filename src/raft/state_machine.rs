@@ -23,9 +23,11 @@ impl StateMachine {
         let inner = Arc::new(RwLock::new(Inner {
             commit_index: 0,
             last_applied: 0,
-            keyspaces: FxHashMap::default(),
-            prev_keyspace: 0,
+            store: OrdMap::default(),
+            snapshots: FxHashMap::default(),
+            prev_snapshot_id: 0,
         }));
+
         let cmd_reply_txs = Arc::new(Mutex::new(BTreeMap::new()));
 
         tokio::spawn({
@@ -127,24 +129,11 @@ impl Snapshot {
     }
 }
 
-struct Keyspace {
-    /// Map<Key,value>
+struct Inner {
     store: OrdMap<Key, Value>,
-    _created: Instant,
 
     snapshots: FxHashMap<u64, Snapshot>,
     prev_snapshot_id: u64,
-}
-impl Keyspace {
-    fn new() -> Self {
-        Self { store: OrdMap::new(), _created: Instant::now(), snapshots: FxHashMap::default(), prev_snapshot_id: 0 }
-    }
-}
-
-struct Inner {
-    /// keyspace_id -> Map<Key, Value>
-    prev_keyspace: u64,
-    keyspaces: FxHashMap<u64, Keyspace>,
 
     commit_index: u64,
     last_applied: u64,
@@ -161,133 +150,92 @@ impl Inner {
         let resp = if let Some(op) = op.write_op {
             use proto::write_op::WriteOp::*;
             let resp: proto::WriteResp = match op {
-                CreateKeyspaceReq(proto::CreateKeyspaceReq {}) => {
-                    self.prev_keyspace += 1;
-                    self.keyspaces.insert(self.prev_keyspace, Keyspace::new());
-                    proto::CreateKeyspaceResp { keyspace: self.prev_keyspace }.into()
+                CreateSnapshotReq(proto::CreateSnapshotReq {}) => {
+                    self.prev_snapshot_id += 1;
+                    self.snapshots.insert(self.prev_snapshot_id, Snapshot::new(self.store.clone(), self.last_applied));
+                    proto::CreateSnapshotResp { snapshot: self.prev_snapshot_id }.into()
                 }
-                DeleteKeyspaceReq(proto::DeleteKeyspaceReq { keyspace }) => match self.keyspaces.remove(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(_ks) => proto::DeleteKeyspaceResp {}.into(),
+                DeleteSnapshotReq(proto::DeleteSnapshotReq { snapshot }) => match self.snapshots.remove(&snapshot) {
+                    Some(_ss) => proto::DeleteSnapshotResp {}.into(),
+                    None => proto::Err::SnapshotNotFound.into(),
                 },
-
-                CreateSnapshotReq(proto::CreateSnapshotReq { keyspace }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        ks.prev_snapshot_id += 1;
-                        ks.snapshots.insert(ks.prev_snapshot_id, Snapshot::new(ks.store.clone(), self.last_applied));
-                        proto::CreateSnapshotResp { snapshot: ks.prev_snapshot_id }.into()
-                    }
-                },
-                DeleteSnapshotReq(proto::DeleteSnapshotReq { keyspace, snapshot }) => {
-                    match self.keyspaces.get_mut(&keyspace) {
-                        None => proto::Err::KeyspaceNotFound.into(),
-                        Some(ks) => match ks.snapshots.remove(&snapshot) {
-                            Some(_ss) => proto::DeleteSnapshotResp {}.into(),
-                            None => proto::Err::SnapshotNotFound.into(),
-                        },
-                    }
+                PurgeSnapshotsReq(proto::PurgeSnapshotsReq {}) => {
+                    let count = self.snapshots.len() as u64;
+                    self.snapshots.clear();
+                    proto::PurgeSnapshotsResp { count }.into()
                 }
-                PurgeSnapshotsReq(proto::PurgeSnapshotsReq { keyspace }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        let count = ks.snapshots.len() as u64;
-                        ks.snapshots.clear();
-                        proto::PurgeSnapshotsResp { count }.into()
-                    }
-                },
 
-                InsertReq(proto::InsertReq { keyspace, key, value }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        let old_value = ks.store.insert(key, value);
-                        proto::InsertResp { old_value }.into()
-                    }
-                },
+                InsertReq(proto::InsertReq { key, value }) => {
+                    let old_value = self.store.insert(key, value);
+                    proto::InsertResp { old_value }.into()
+                }
 
-                InsertBatchReq(proto::InsertBatchReq { keyspace, pairs }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        let mut old_pairs = vec![];
+                InsertBatchReq(proto::InsertBatchReq { pairs }) => {
+                    let mut old_pairs = vec![];
 
-                        for proto::Pair { key, value } in pairs {
-                            if let Some(old) = ks.store.insert(key.clone(), value) {
-                                old_pairs.push(proto::Pair { key, value: old });
-                            }
+                    for proto::Pair { key, value } in pairs {
+                        if let Some(old) = self.store.insert(key.clone(), value) {
+                            old_pairs.push(proto::Pair { key, value: old });
                         }
-
-                        proto::InsertBatchResp { old_pairs }.into()
                     }
-                },
 
-                InsertBatchCasReq(proto::InsertBatchCasReq { keyspace, snapshot, pairs }) => {
-                    match self.keyspaces.get_mut(&keyspace) {
-                        None => proto::Err::KeyspaceNotFound.into(),
-                        Some(ks) => match ks.snapshots.get(&snapshot) {
-                            None => proto::Err::SnapshotNotFound.into(),
-                            Some(ss) => match ss.read_keys.iter().any(|k| ss.store.get(k) != ks.store.get(k)) {
-                                // if snapshot read-basis was violated
-                                true => proto::Err::CasFailure.into(),
-                                // otherwise we can write
-                                false => {
-                                    let mut old_pairs = vec![];
-                                    for proto::Pair { key, value } in pairs {
-                                        if let Some(old) = ks.store.insert(key.clone(), value) {
-                                            old_pairs.push(proto::Pair { key, value: old });
-                                        }
+                    proto::InsertBatchResp { old_pairs }.into()
+                }
+
+                InsertBatchCasReq(proto::InsertBatchCasReq { snapshot, pairs }) => {
+                    match self.snapshots.get(&snapshot) {
+                        None => proto::Err::SnapshotNotFound.into(),
+                        Some(ss) => match ss.read_keys.iter().any(|k| ss.store.get(k) != self.store.get(k)) {
+                            // if snapshot read-basis was violated
+                            true => proto::Err::CasFailure.into(),
+                            // otherwise we can write
+                            false => {
+                                let mut old_pairs = vec![];
+                                for proto::Pair { key, value } in pairs {
+                                    if let Some(old) = self.store.insert(key.clone(), value) {
+                                        old_pairs.push(proto::Pair { key, value: old });
                                     }
-
-                                    proto::InsertBatchCasResp { old_pairs }.into()
                                 }
-                            },
+
+                                proto::InsertBatchCasResp { old_pairs }.into()
+                            }
                         },
                     }
                 }
 
-                DeleteReq(proto::DeleteReq { keyspace, key }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        let old_value = ks.store.remove(&key);
-                        proto::DeleteResp { old_value }.into()
-                    }
-                },
+                DeleteReq(proto::DeleteReq { key }) => {
+                    let old_value = self.store.remove(&key);
+                    proto::DeleteResp { old_value }.into()
+                }
 
-                DeleteBatchReq(proto::DeleteBatchReq { keyspace, keys }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        let mut old_pairs = vec![];
+                DeleteBatchReq(proto::DeleteBatchReq { keys }) => {
+                    let mut old_pairs = vec![];
 
-                        for k in keys {
-                            if let Some((key, value)) = ks.store.remove_with_key(&k) {
-                                old_pairs.push(proto::Pair { key, value });
-                            }
-                        }
-
-                        proto::DeleteBatchResp { old_pairs }.into()
-                    }
-                },
-
-                DeleteRangeReq(proto::DeleteRangeReq { keyspace, start_key, end_key }) => {
-                    match self.keyspaces.get_mut(&keyspace) {
-                        None => proto::Err::KeyspaceNotFound.into(),
-                        Some(ks) => {
-                            let mut old_pairs = vec![];
-
-                            // Probably have to clone because its immutable, don't think theres a way around this
-                            // Normally we could (conceptually) do something like
-                            // ks.store.range(..).drain(..)
-                            let to_remove: Vec<Vec<u8>> =
-                                ks.store.range(start_key..end_key).map(|(k, _)| k.clone()).collect();
-
-                            for k in to_remove {
-                                if let Some((key, value)) = ks.store.remove_with_key(&k) {
-                                    old_pairs.push(proto::Pair { key, value });
-                                }
-                            }
-
-                            proto::DeleteRangeResp { old_pairs }.into()
+                    for k in keys {
+                        if let Some((key, value)) = self.store.remove_with_key(&k) {
+                            old_pairs.push(proto::Pair { key, value });
                         }
                     }
+
+                    proto::DeleteBatchResp { old_pairs }.into()
+                }
+
+                DeleteRangeReq(proto::DeleteRangeReq { start_key, end_key }) => {
+                    let mut old_pairs = vec![];
+
+                    // Probably have to clone because its immutable, don't think theres a way around this
+                    // Normally we could (conceptually) do something like
+                    // ks.store.range(..).drain(..)
+                    let to_remove: Vec<Vec<u8>> =
+                        self.store.range(start_key..end_key).map(|(k, _)| k.clone()).collect();
+
+                    for k in to_remove {
+                        if let Some((key, value)) = self.store.remove_with_key(&k) {
+                            old_pairs.push(proto::Pair { key, value });
+                        }
+                    }
+
+                    proto::DeleteRangeResp { old_pairs }.into()
                 }
             };
 
@@ -312,98 +260,75 @@ impl Inner {
         match read_op.read_op {
             None => unreachable!(),
             Some(op) => match op {
-                GetReq(proto::GetReq { keyspace, snapshot, key }) => match self.keyspaces.get_mut(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => match snapshot {
-                        Some(requested_ss) => match ks.snapshots.get_mut(&requested_ss) {
-                            None => proto::Err::SnapshotNotFound.into(),
-                            Some(ss) => {
-                                let value = ss.store.get(&key).cloned();
-                                tracing::info!("ZZZ {:?}", &key);
-                                ss.read_keys.insert(key);
-                                proto::GetResp { value }.into()
-                            }
-                        },
-                        None => {
-                            let value = ks.store.get(&key).cloned();
+                GetReq(proto::GetReq { snapshot, key }) => match snapshot {
+                    Some(requested_ss) => match self.snapshots.get_mut(&requested_ss) {
+                        None => proto::Err::SnapshotNotFound.into(),
+                        Some(ss) => {
+                            let value = ss.store.get(&key).cloned();
+                            tracing::info!("ZZZ {:?}", &key);
+                            ss.read_keys.insert(key);
                             proto::GetResp { value }.into()
                         }
                     },
+                    None => {
+                        let value = self.store.get(&key).cloned();
+                        proto::GetResp { value }.into()
+                    }
                 },
 
-                GetBatchReq(proto::GetBatchReq { keyspace, snapshot, keys }) => match self.keyspaces.get_mut(&keyspace)
-                {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => match snapshot {
-                        Some(requested_ss) => match ks.snapshots.get_mut(&requested_ss) {
-                            None => proto::Err::SnapshotNotFound.into(),
-                            Some(ss) => {
-                                let mut pairs = vec![];
-                                for key in keys {
-                                    if let Some((k, v)) = ss.store.get_key_value(&key) {
-                                        ss.read_keys.insert(k.clone());
-                                        pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
-                                    }
-                                }
-                                proto::GetBatchResp { pairs }.into()
-                            }
-                        },
-                        None => {
+                GetBatchReq(proto::GetBatchReq { snapshot, keys }) => match snapshot {
+                    Some(requested_ss) => match self.snapshots.get_mut(&requested_ss) {
+                        None => proto::Err::SnapshotNotFound.into(),
+                        Some(ss) => {
                             let mut pairs = vec![];
                             for key in keys {
-                                if let Some((k, v)) = ks.store.get_key_value(&key) {
+                                if let Some((k, v)) = ss.store.get_key_value(&key) {
+                                    ss.read_keys.insert(k.clone());
                                     pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
                                 }
                             }
                             proto::GetBatchResp { pairs }.into()
                         }
                     },
-                },
-
-                GetRangeReq(proto::GetRangeReq { keyspace, snapshot, start_key, end_key }) => {
-                    match self.keyspaces.get_mut(&keyspace) {
-                        None => proto::Err::KeyspaceNotFound.into(),
-                        Some(ks) => match snapshot {
-                            Some(requested_ss) => match ks.snapshots.get_mut(&requested_ss) {
-                                None => proto::Err::SnapshotNotFound.into(),
-                                Some(ss) => {
-                                    let mut pairs = vec![];
-
-                                    for (k, v) in ss.store.range(start_key..end_key) {
-                                        ss.read_keys.insert(k.clone());
-                                        pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
-                                    }
-                                    proto::GetRangeResp { pairs }.into()
-                                }
-                            },
-
-                            None => {
-                                let mut pairs = vec![];
-
-                                for (k, v) in ks.store.range(start_key..end_key) {
-                                    pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
-                                }
-                                proto::GetRangeResp { pairs }.into()
+                    None => {
+                        let mut pairs = vec![];
+                        for key in keys {
+                            if let Some((k, v)) = self.store.get_key_value(&key) {
+                                pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
                             }
-                        },
-                    }
-                }
-
-                ListKeyspacesReq(proto::ListKeyspacesReq {}) => {
-                    let keyspaces = self.keyspaces.keys().cloned().collect();
-                    proto::ListKeyspacesResp { keyspaces }.into()
-                }
-
-                ListSnapshotsReq(proto::ListSnapshotsReq { keyspace }) => match self.keyspaces.get(&keyspace) {
-                    None => proto::Err::KeyspaceNotFound.into(),
-                    Some(ks) => {
-                        for ss in &ks.snapshots {
-                            tracing::debug!("{:#?}", ss);
                         }
-                        let snapshots = ks.snapshots.keys().cloned().collect();
-                        proto::ListSnapshotsResp { snapshots }.into()
+                        proto::GetBatchResp { pairs }.into()
                     }
                 },
+
+                GetRangeReq(proto::GetRangeReq { snapshot, start_key, end_key }) => match snapshot {
+                    Some(requested_ss) => match self.snapshots.get_mut(&requested_ss) {
+                        None => proto::Err::SnapshotNotFound.into(),
+                        Some(ss) => {
+                            let mut pairs = vec![];
+
+                            for (k, v) in ss.store.range(start_key..end_key) {
+                                ss.read_keys.insert(k.clone());
+                                pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
+                            }
+                            proto::GetRangeResp { pairs }.into()
+                        }
+                    },
+
+                    None => {
+                        let mut pairs = vec![];
+
+                        for (k, v) in self.store.range(start_key..end_key) {
+                            pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
+                        }
+                        proto::GetRangeResp { pairs }.into()
+                    }
+                },
+
+                ListSnapshotsReq(proto::ListSnapshotsReq {}) => {
+                    let snapshots = self.snapshots.keys().cloned().collect();
+                    proto::ListSnapshotsResp { snapshots }.into()
+                }
             },
         }
     }
