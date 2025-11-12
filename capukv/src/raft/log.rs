@@ -89,7 +89,7 @@ impl Log {
 
     /// Deletes `log[last_index]` and all entries after it
     pub(crate) async fn truncate(&self, last_index: u64) -> Result<(), crate::Error> {
-        // surely theres a faster way to do this, or itd be an easy addition to fjall
+            // surely theres a faster way to do this, or itd be an easy addition to fjall
         // todo do this more efficiently ^
 
         let mut keys = vec![];

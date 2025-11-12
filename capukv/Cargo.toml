@@ -1,0 +1,32 @@
+[package]
+name = "capukv"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+monke = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+clap = { workspace = true, features = ["derive"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+bytes = { workspace = true }
+tokio = { workspace = true, features = [
+    "bytes",
+    "fs",
+    "macros",
+    "rt-multi-thread",
+    "signal",
+] }
+fjall = { workspace = true, features = ["bytes"] }
+im = { workspace = true }
+rust-rocksdb = { workspace = true, features = ["jemalloc"] }
+rustc-hash = { workspace = true }
+paste = { workspace = true }
+rand = { workspace = true }
+
+[build-dependencies]
+tonic-build = "0.14.2"
+tonic-prost-build = "0.14.2"
