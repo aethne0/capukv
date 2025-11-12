@@ -11,6 +11,8 @@ use crate::raft::timer::Timer;
 use crate::raft::types::RaftMessage;
 use crate::{fmt_id, raft};
 
+const CONNECT_TIMEOUT_MS: u64 = 500;
+
 type RaftTonicClient = proto::raft_service_client::RaftServiceClient<tonic::transport::Channel>;
 // todo refactor grpc+logging and raft state out from eachother here
 pub(crate) struct RaftPeer {
@@ -92,7 +94,12 @@ impl RaftPeer {
         let client = match &*lock {
             None => {
                 let endpoint = Endpoint::from_shared(self.uri.clone())?;
-                let client = RaftTonicClient::connect(endpoint).await?;
+                let client = tokio::time::timeout(Duration::from_millis(CONNECT_TIMEOUT_MS), async {
+                    RaftTonicClient::connect(endpoint).await
+                })
+                .await
+                .map_err(|_e| crate::Error::Transport("Timed-out getting connection".to_string()))??;
+
                 *lock = Some(client.clone());
                 client
             }

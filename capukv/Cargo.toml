@@ -22,7 +22,6 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "signal",
 ] }
-fjall = { workspace = true, features = ["bytes"] }
 im = { workspace = true }
 rust-rocksdb = { workspace = true, features = ["jemalloc"] }
 rustc-hash = { workspace = true }

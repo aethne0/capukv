@@ -139,7 +139,7 @@ impl RaftInner {
 
         self.new_election_timer();
 
-        tracing::info!("Became CANDIDATE (term: {})", self.persist.local.term + 1);
+        tracing::info!("Became CANDIDATE (term: {})", self.persist.local.term);
         Ok(())
     }
 

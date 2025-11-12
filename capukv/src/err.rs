@@ -32,8 +32,8 @@ impl From<tokio::task::JoinError> for crate::Error {
     }
 }
 
-impl From<fjall::Error> for crate::Error {
-    fn from(value: fjall::Error) -> Self {
+impl From<rust_rocksdb::Error> for crate::Error {
+    fn from(value: rust_rocksdb::Error) -> Self {
         crate::Error::Persistence(value.to_string())
     }
 }

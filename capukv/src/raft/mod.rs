@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::{Mutex, mpsc, oneshot};
 
+mod db;
 mod log;
 mod node;
 mod persist;
@@ -15,7 +16,7 @@ use crate::{
     err::RaftResponseError,
     fmt_id,
     raft::{
-        log::Log, node::RaftInner, persist::Persist, state_machine::StateMachine, transport::RaftPeer,
+        db::get_db, log::Log, node::RaftInner, persist::Persist, state_machine::StateMachine, transport::RaftPeer,
         types::RaftMessage,
     },
 };
@@ -43,9 +44,10 @@ impl Raft {
     pub(crate) async fn new(
         id: String, path: &std::path::Path, mut peers: Vec<ArgPeer>, frontend_uri: String,
     ) -> Result<Self, crate::Error> {
-        // We are just taking peers from command line right now
-        let persist = Persist::new(id, path)?;
-        let log = Arc::new(Log::new(path)?);
+        let db = get_db(path);
+        let persist = Persist::new(id, db.clone())?;
+        let log = Arc::new(Log::new(db.clone())?);
+
         let state_machine = Arc::new(StateMachine::new(log.clone()));
 
         tracing::info!("Our ID: {} ({})", &persist.local.id, fmt_id(&persist.local.id));
