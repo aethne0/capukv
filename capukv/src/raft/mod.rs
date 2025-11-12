@@ -14,12 +14,24 @@ use crate::{
     ArgPeer,
     err::RaftResponseError,
     fmt_id,
-    proto::{self, AppendEntriesRequest, AppendEntriesResponse, VoteRequest, VoteResponse},
     raft::{
         log::Log, node::RaftInner, persist::Persist, state_machine::StateMachine, transport::RaftPeer,
         types::RaftMessage,
     },
 };
+
+pub(crate) struct SharedRaft(Arc<Raft>);
+impl std::ops::Deref for SharedRaft {
+    type Target = Arc<Raft>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl From<Arc<Raft>> for SharedRaft {
+    fn from(value: Arc<Raft>) -> Self {
+        Self(value)
+    }
+}
 
 pub(crate) struct Raft {
     // message queue
@@ -69,8 +81,8 @@ impl Raft {
 
     /// For transport layer to submit request-vote messages into the node
     pub(crate) async fn submit_request_vote(
-        &self, req: VoteRequest,
-    ) -> Result<oneshot::Receiver<VoteResponse>, crate::Error> {
+        &self, req: proto::VoteRequest,
+    ) -> Result<oneshot::Receiver<proto::VoteResponse>, crate::Error> {
         let (tx, rx) = oneshot::channel();
         if let Err(e) = self
             .msg_tx
@@ -85,8 +97,8 @@ impl Raft {
 
     /// For transport layer to submit append-entries messages into the node
     pub(crate) async fn submit_append_entries(
-        &self, req: AppendEntriesRequest,
-    ) -> Result<oneshot::Receiver<AppendEntriesResponse>, crate::Error> {
+        &self, req: proto::AppendEntriesRequest,
+    ) -> Result<oneshot::Receiver<proto::AppendEntriesResponse>, crate::Error> {
         let (tx, rx) = oneshot::channel();
         if let Err(e) = self
             .msg_tx

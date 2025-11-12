@@ -7,7 +7,7 @@ use tokio::{
     time::Instant,
 };
 
-use crate::{proto, raft::log::Log};
+use crate::raft::log::Log;
 
 pub(crate) struct StateMachine {
     inner: Arc<RwLock<Inner>>,

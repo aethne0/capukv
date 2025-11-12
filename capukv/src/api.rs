@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use crate::{proto, raft::Raft};
-
 // ? status.rs in the tonic code is a great guide to which grpc status-codes are correct
 // ? some relevent excerpts:
 // Operation was rejected because the system is not in a state required for
@@ -18,15 +14,6 @@ use crate::{proto, raft::Raft};
 //     because the directory is non-empty, `FailedPrecondition` should be
 //     returned since the client should not retry unless they have first
 //     fixed up the directory by deleting files from it.
-
-impl From<proto::Err> for tonic::Status {
-    fn from(value: proto::Err) -> Self {
-        match value {
-            proto::Err::SnapshotNotFound => tonic::Status::not_found("Snapshot".to_string()),
-            proto::Err::CasFailure => tonic::Status::aborted("CAS basis failure"),
-        }
-    }
-}
 
 impl From<crate::err::RaftResponseError> for tonic::Status {
     fn from(value: crate::err::RaftResponseError) -> Self {
@@ -76,7 +63,7 @@ async fn recv_read(
 }
 
 #[tonic::async_trait]
-impl proto::api_service_server::ApiService for Arc<Raft> {
+impl proto::api_service_server::ApiService for crate::raft::SharedRaft {
     // id like these to all be macros but macroing gave me some weird lifetime complaint? i dont really understand how
     // maybe some weird macro_rules! interaction with async_trait
 

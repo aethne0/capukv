@@ -4,7 +4,6 @@ use tokio::sync::{Mutex, MutexGuard, mpsc, oneshot};
 
 use crate::{
     fmt_id,
-    proto::{self, AppendEntriesRequest, AppendEntriesResponse, LogEntry, VoteRequest, VoteResponse},
     raft::{
         RaftResponseError,
         log::Log,
@@ -196,7 +195,7 @@ impl RaftInner {
         assert_eq!(self.role, Role::Leader, "append to logs AS LEADER");
         let (tx, rx) = oneshot::channel();
 
-        let entry = LogEntry { op: Some(op), term: self.persist.local.term, index: self.log.last_index()? + 1 };
+        let entry = proto::LogEntry { op: Some(op), term: self.persist.local.term, index: self.log.last_index()? + 1 };
         let index = entry.index;
 
         self.log.insert(&entry)?;
@@ -206,7 +205,7 @@ impl RaftInner {
     }
 
     /// Should only be called as follower when receiving non-empty append-entries from leader.
-    async fn add_logs_as_follower(&self, mut entries: Vec<LogEntry>) -> Result<(), crate::Error> {
+    async fn add_logs_as_follower(&self, mut entries: Vec<proto::LogEntry>) -> Result<(), crate::Error> {
         assert_eq!(self.role, Role::Follower, "add to logs AS FOLLOWER");
         assert!(!entries.is_empty());
         // Careful here!
@@ -234,13 +233,13 @@ impl RaftInner {
 
         let (prev_log_term, prev_log_index) = self.get_prev_log(&peer)?;
 
-        let req: AppendEntriesRequest = match &peer.in_flight_ae_req {
+        let req: proto::AppendEntriesRequest = match &peer.in_flight_ae_req {
             Some(in_flight_req) => in_flight_req.clone(),
 
             None => {
                 let entries = self.log.get_range(peer.next_index, peer.next_index + MAX_MSG_PER_APPEND_ENTRIES)?;
 
-                let req = AppendEntriesRequest {
+                let req = proto::AppendEntriesRequest {
                     req_id: peer.next_req_id(),
                     term: self.persist.local.term,
                     leader_id: self.persist.local.id.clone(),
@@ -381,7 +380,7 @@ impl RaftInner {
 
                         // * reply false if term < currentTerm
                         if term > request.term {
-                            reply_tx.send(AppendEntriesResponse::from((&request, term, false))).unwrap();
+                            reply_tx.send(proto::AppendEntriesResponse::from((&request, term, false))).unwrap();
                             continue;
                         }
 
@@ -396,7 +395,7 @@ impl RaftInner {
                             .get(request.prev_log_index)?
                             .is_some_and(|value| value.term == request.prev_log_term)
                         {
-                            reply_tx.send(AppendEntriesResponse::from((&request, term, false))).unwrap();
+                            reply_tx.send(proto::AppendEntriesResponse::from((&request, term, false))).unwrap();
                             continue;
                         }
 
@@ -405,7 +404,7 @@ impl RaftInner {
                             let last_index_received = request.entries.last().unwrap().index;
                             let new_commit_index = request.leader_commit.min(last_index_received);
                             // construct here so we can move into add_logs_as_follower
-                            let resp = AppendEntriesResponse::from((&request, term, true));
+                            let resp = proto::AppendEntriesResponse::from((&request, term, true));
                             self.add_logs_as_follower(request.entries).await?;
                             self.state_machine.set_commit_index(new_commit_index).await;
                             let _ = reply_tx.send(resp);
@@ -413,7 +412,7 @@ impl RaftInner {
                             self.state_machine
                                 .set_commit_index(request.leader_commit.min(request.prev_log_index))
                                 .await;
-                            let _ = reply_tx.send(AppendEntriesResponse::from((&request, term, true)));
+                            let _ = reply_tx.send(proto::AppendEntriesResponse::from((&request, term, true)));
                         }
                     }
                 }
@@ -496,7 +495,9 @@ impl RaftInner {
                             let from_id = self.persist.local.id.clone();
 
                             if request.term < self.persist.local.term {
-                                reply_tx.send(VoteResponse { req_id, term, vote_granted: false, from_id }).unwrap();
+                                reply_tx
+                                    .send(proto::VoteResponse { req_id, term, vote_granted: false, from_id })
+                                    .unwrap();
                             } else if !(self.persist.local.voted_for.clone())
                                 .is_some_and(|id| id != request.candidate_id)
                                 && self
@@ -510,16 +511,23 @@ impl RaftInner {
 
                                 self.new_election_timer();
                                 reply_tx
-                                    .send(VoteResponse { req_id, term: request.term, vote_granted: true, from_id })
+                                    .send(proto::VoteResponse {
+                                        req_id,
+                                        term: request.term,
+                                        vote_granted: true,
+                                        from_id,
+                                    })
                                     .unwrap();
                             } else {
-                                reply_tx.send(VoteResponse { req_id, term, vote_granted: false, from_id }).unwrap();
+                                reply_tx
+                                    .send(proto::VoteResponse { req_id, term, vote_granted: false, from_id })
+                                    .unwrap();
                             }
                         }
                         Role::Candidate | Role::Leader => {
                             // same or lower term, so we don't grant a vote (we already voted for ourselves)
                             reply_tx
-                                .send(VoteResponse {
+                                .send(proto::VoteResponse {
                                     req_id,
                                     term: self.persist.local.term,
                                     vote_granted: false,
@@ -569,7 +577,7 @@ impl RaftInner {
                                     let peer_lock = peer_client.lock().await;
                                     peer_lock
                                         .request_vote(
-                                            VoteRequest {
+                                            proto::VoteRequest {
                                                 req_id: peer_lock.next_req_id(),
                                                 term,
                                                 candidate_id: id,

@@ -7,13 +7,9 @@ use tokio::time::Instant;
 use tonic::transport::Endpoint;
 use tonic::{Request, Response, Result};
 
-use crate::proto::{
-    AppendEntriesRequest, AppendEntriesResponse, VoteRequest, VoteResponse, raft_service_server::RaftService,
-};
-use crate::raft::Raft;
 use crate::raft::timer::Timer;
 use crate::raft::types::RaftMessage;
-use crate::{fmt_id, proto};
+use crate::{fmt_id, raft};
 
 type RaftTonicClient = proto::raft_service_client::RaftServiceClient<tonic::transport::Channel>;
 // todo refactor grpc+logging and raft state out from eachother here
@@ -33,7 +29,7 @@ pub(crate) struct RaftPeer {
     // an in-flight request
     pub(crate) dirty: bool,
     /// This is actually "append entries in flight"
-    pub(crate) in_flight_ae_req: Option<AppendEntriesRequest>,
+    pub(crate) in_flight_ae_req: Option<proto::AppendEntriesRequest>,
     /// This is the highest req_id we have gotten a response to
     pub(crate) highest_resp_req_id: Option<u64>,
 
@@ -152,7 +148,7 @@ impl RaftPeer {
         }
     }
 
-    pub(crate) async fn request_vote(&self, args: VoteRequest, msg_tx: mpsc::Sender<RaftMessage>) {
+    pub(crate) async fn request_vote(&self, args: proto::VoteRequest, msg_tx: mpsc::Sender<RaftMessage>) {
         let err = match self.get_client().await {
             Ok(mut client) => {
                 let result = client.request_vote(args).await;
@@ -178,7 +174,7 @@ impl RaftPeer {
         }
     }
 
-    pub(crate) async fn append_entries(&self, args: AppendEntriesRequest, msg_tx: mpsc::Sender<RaftMessage>) {
+    pub(crate) async fn append_entries(&self, args: proto::AppendEntriesRequest, msg_tx: mpsc::Sender<RaftMessage>) {
         tracing::trace!(
             "SENDING APPEND-ENTRY <HEARTBEAT?> (req:{} -> {}) pli:({},{}) lc:{} {}",
             args.req_id,
@@ -228,15 +224,17 @@ impl RaftPeer {
 
 // todo timeouts
 #[tonic::async_trait]
-impl RaftService for Arc<Raft> {
-    async fn append_entries(&self, req: Request<AppendEntriesRequest>) -> Result<Response<AppendEntriesResponse>> {
+impl proto::raft_service_server::RaftService for raft::SharedRaft {
+    async fn append_entries(
+        &self, req: Request<proto::AppendEntriesRequest>,
+    ) -> Result<Response<proto::AppendEntriesResponse>> {
         let (_, _, req) = req.into_parts();
         let receiver = self.submit_append_entries(req).await?;
         let resp = receiver.await.map_err(|e| tonic::Status::internal(format!("RecvError: {:?}", e)))?;
         Ok(resp.into())
     }
 
-    async fn request_vote(&self, req: Request<VoteRequest>) -> Result<Response<VoteResponse>> {
+    async fn request_vote(&self, req: Request<proto::VoteRequest>) -> Result<Response<proto::VoteResponse>> {
         let (_, _, req) = req.into_parts();
         let receiver = self.submit_request_vote(req).await?;
         let resp = receiver.await.map_err(|e| tonic::Status::internal(format!("RecvError: {:?}", e)))?;

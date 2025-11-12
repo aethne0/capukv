@@ -209,16 +209,14 @@ dependencies = [
  "fjall",
  "im",
  "monke",
- "paste",
  "prost",
+ "proto",
  "rand",
  "rust-rocksdb",
  "rustc-hash",
  "tokio",
  "tonic",
- "tonic-build",
  "tonic-prost",
- "tonic-prost-build",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -232,6 +230,7 @@ dependencies = [
  "clap",
  "monke",
  "prost",
+ "proto",
  "tonic",
  "tonic-build",
  "tonic-prost",
@@ -1080,6 +1079,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9b4db3d6da204ed77bb26ba83b6122a73aeb2e87e25fbf7ad2e84c4ccbf8f72"
 dependencies = [
  "prost",
+]
+
+[[package]]
+name = "proto"
+version = "0.1.0"
+dependencies = [
+ "paste",
+ "prost",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]

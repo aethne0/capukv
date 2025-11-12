@@ -1,7 +1,7 @@
 use prost::Message;
 use rust_rocksdb::{DB, Direction, IteratorMode, Options};
 
-use crate::proto::LogEntry;
+use proto::LogEntry;
 
 fn ser_key(index: u64) -> Vec<u8> {
     index.to_be_bytes().to_vec()
@@ -89,7 +89,7 @@ impl Log {
 
     /// Deletes `log[last_index]` and all entries after it
     pub(crate) async fn truncate(&self, last_index: u64) -> Result<(), crate::Error> {
-            // surely theres a faster way to do this, or itd be an easy addition to fjall
+        // surely theres a faster way to do this, or itd be an easy addition to fjall
         // todo do this more efficiently ^
 
         let mut keys = vec![];

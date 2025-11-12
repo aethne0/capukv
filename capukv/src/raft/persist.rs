@@ -1,7 +1,5 @@
 use prost::Message;
 
-use crate::proto::{self};
-
 const LOCAL_KEY: [u8; 4] = *b"capu";
 pub(crate) struct Persist {
     local_handle: fjall::PartitionHandle,

@@ -1,16 +1,43 @@
-use paste::paste;
+mod proto {
+    tonic::include_proto!("capukv");
+}
 
-tonic::include_proto!("capukv");
+#[cfg(feature = "server")]
+mod server {
+    use crate::proto::*;
 
-// ! these macros rely on correct protobuf naming!
-/*
-message ReadResp {
-  oneof op {
-    ListKeyspacesResp list_keyspaces_resp = 1;
-*/
-// The CamelCase type name ( )must match the snake_case field name
+    use paste::paste;
 
-macro_rules! impl_read_op {
+    impl From<Err> for tonic::Status {
+        fn from(value: Err) -> Self {
+            match value {
+                Err::SnapshotNotFound => tonic::Status::not_found("Snapshot".to_string()),
+                Err::CasFailure => tonic::Status::aborted("CAS basis failure"),
+            }
+        }
+    }
+
+    impl From<Err> for ReadResp {
+        fn from(value: Err) -> Self {
+            ReadResp { read_resp: Some(read_resp::ReadResp::Err(value.into())) }
+        }
+    }
+
+    impl From<Err> for WriteResp {
+        fn from(value: Err) -> Self {
+            WriteResp { write_resp: Some(write_resp::WriteResp::Err(value.into())) }
+        }
+    }
+
+    // ! these macros rely on correct protobuf naming!
+    /*
+    message ReadResp {
+      oneof op {
+        ListKeyspacesResp list_keyspaces_resp = 1;
+    */
+    // The CamelCase type name ( )must match the snake_case field name
+
+    macro_rules! impl_read_op {
     ($name:ident) => {
         // from ReadOk
         paste! {
@@ -49,7 +76,7 @@ macro_rules! impl_read_op {
     };
 }
 
-macro_rules! impl_write_op {
+    macro_rules! impl_write_op {
     ($name:ident) => {
         // from ReadOk
         paste! {
@@ -88,29 +115,40 @@ macro_rules! impl_write_op {
     };
 }
 
-impl From<Err> for ReadResp {
-    fn from(value: Err) -> Self {
-        ReadResp { read_resp: Some(read_resp::ReadResp::Err(value.into())) }
+    impl_read_op!(ListSnapshots);
+    impl_read_op!(Get);
+    impl_read_op!(GetBatch);
+    impl_read_op!(GetRange);
+
+    impl_write_op!(CreateSnapshot);
+    impl_write_op!(DeleteSnapshot);
+    impl_write_op!(PurgeSnapshots);
+    impl_write_op!(Insert);
+    impl_write_op!(InsertBatch);
+    impl_write_op!(InsertBatchCas);
+    impl_write_op!(Delete);
+    impl_write_op!(DeleteBatch);
+    impl_write_op!(DeleteRange);
+
+    impl From<(&AppendEntriesRequest, u64, bool)> for AppendEntriesResponse {
+        fn from((req, term, success): (&AppendEntriesRequest, u64, bool)) -> Self {
+            AppendEntriesResponse {
+                term,
+                success,
+                req_id: req.req_id,
+                leader_id: req.leader_id.clone(),
+                follower_id: req.follower_id.clone(),
+                prev_log_index: req.prev_log_index,
+                prev_log_term: req.prev_log_term,
+                leader_commit: req.leader_commit,
+                first_entry_index: req.entries.first().map_or(0, |entry| entry.index),
+                entries_len: req.entries.len() as u64,
+            }
+        }
     }
 }
 
-impl From<Err> for WriteResp {
-    fn from(value: Err) -> Self {
-        WriteResp { write_resp: Some(write_resp::WriteResp::Err(value.into())) }
-    }
-}
+#[cfg(feature = "client")]
+mod client {}
 
-impl_read_op!(ListSnapshots);
-impl_read_op!(Get);
-impl_read_op!(GetBatch);
-impl_read_op!(GetRange);
-
-impl_write_op!(CreateSnapshot);
-impl_write_op!(DeleteSnapshot);
-impl_write_op!(PurgeSnapshots);
-impl_write_op!(Insert);
-impl_write_op!(InsertBatch);
-impl_write_op!(InsertBatchCas);
-impl_write_op!(Delete);
-impl_write_op!(DeleteBatch);
-impl_write_op!(DeleteRange);
+pub use proto::*;

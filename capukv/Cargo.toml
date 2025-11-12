@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+proto = { workspace = true, features = ["server"] }
 monke = { workspace = true }
+
 prost = { workspace = true }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
@@ -24,9 +26,4 @@ fjall = { workspace = true, features = ["bytes"] }
 im = { workspace = true }
 rust-rocksdb = { workspace = true, features = ["jemalloc"] }
 rustc-hash = { workspace = true }
-paste = { workspace = true }
 rand = { workspace = true }
-
-[build-dependencies]
-tonic-build = "0.14.2"
-tonic-prost-build = "0.14.2"

@@ -1,6 +1,5 @@
 mod api;
 mod err;
-mod proto;
 mod raft;
 
 pub use err::Error;
@@ -31,7 +30,7 @@ impl CapuKv {
         let raft = std::sync::Arc::new(Raft::new(id, path, peers, frontend_uri).await?);
 
         let raft_handle = tokio::spawn({
-            let raft = raft.clone();
+            let raft: crate::raft::SharedRaft = raft.clone().into();
             async move {
                 tonic::transport::Server::builder()
                     .add_service(proto::raft_service_server::RaftServiceServer::new(raft))
@@ -42,7 +41,7 @@ impl CapuKv {
         });
 
         let api_handle = tokio::spawn({
-            let raft = raft.clone();
+            let raft: crate::raft::SharedRaft = raft.clone().into();
             async move {
                 tonic::transport::Server::builder()
                     .add_service(proto::api_service_server::ApiServiceServer::new(raft))

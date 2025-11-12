@@ -6,11 +6,7 @@ use std::{
 use rand::Rng;
 use tokio::sync::oneshot;
 
-use crate::{
-    fmt_id,
-    proto::{self, AppendEntriesRequest, AppendEntriesResponse, VoteRequest, VoteResponse},
-    raft::RaftResponseError,
-};
+use crate::{fmt_id, raft::RaftResponseError};
 
 // * Constants
 const BASE_HEARTBEAT: f64 = 0.3;
@@ -18,11 +14,11 @@ pub(crate) const MAX_MSG_PER_APPEND_ENTRIES: u64 = 64;
 
 #[derive(Debug)]
 pub(crate) enum RaftMessage {
-    RequestVote(VoteRequest, oneshot::Sender<VoteResponse>),
-    AppendEntries(AppendEntriesRequest, oneshot::Sender<AppendEntriesResponse>),
+    RequestVote(proto::VoteRequest, oneshot::Sender<proto::VoteResponse>),
+    AppendEntries(proto::AppendEntriesRequest, oneshot::Sender<proto::AppendEntriesResponse>),
 
-    RequestVoteResponse(VoteResponse),
-    AppendEntriesResponse(AppendEntriesResponse),
+    RequestVoteResponse(proto::VoteResponse),
+    AppendEntriesResponse(proto::AppendEntriesResponse),
 
     HeartbeatTimeout(String),
     ElectionTimeout,
@@ -122,21 +118,4 @@ pub(crate) fn heartbeat_dur() -> Duration {
 #[inline]
 pub(crate) fn election_dur() -> Duration {
     Duration::from_secs_f64(BASE_HEARTBEAT * randrange(2.5, 5.0))
-}
-
-impl From<(&AppendEntriesRequest, u64, bool)> for AppendEntriesResponse {
-    fn from((req, term, success): (&AppendEntriesRequest, u64, bool)) -> Self {
-        AppendEntriesResponse {
-            term,
-            success,
-            req_id: req.req_id,
-            leader_id: req.leader_id.clone(),
-            follower_id: req.follower_id.clone(),
-            prev_log_index: req.prev_log_index,
-            prev_log_term: req.prev_log_term,
-            leader_commit: req.leader_commit,
-            first_entry_index: req.entries.first().map_or(0, |entry| entry.index),
-            entries_len: req.entries.len() as u64,
-        }
-    }
 }
