@@ -17,7 +17,7 @@ type RaftTonicClient = proto::raft_service_client::RaftServiceClient<tonic::tran
 // todo refactor grpc+logging and raft state out from eachother here
 pub(crate) struct RaftPeer {
     pub(crate) uri: String,
-    pub(crate) id: String,
+    pub(crate) id: uuid::Uuid,
     client: Arc<Mutex<Option<RaftTonicClient>>>,
     pub(crate) next_index: u64,
     pub(crate) match_index: u64,
@@ -40,7 +40,7 @@ pub(crate) struct RaftPeer {
 
 impl RaftPeer {
     #[must_use]
-    pub(crate) fn new(uri: String, id: String) -> Self {
+    pub(crate) fn new(uri: String, id: uuid::Uuid) -> Self {
         Self {
             uri,
             id,
@@ -173,11 +173,7 @@ impl RaftPeer {
         };
         *self.client.lock().await = None;
         if self.should_log_failure().await {
-            tracing::warn!(
-                "[peer-client {}][grpc request_vote] failed -> {}",
-                fmt_id(&self.id.to_string()),
-                err.to_string()
-            );
+            tracing::warn!("[peer-client {}][grpc request_vote] failed -> {}", fmt_id(&self.id), err.to_string());
         }
     }
 
@@ -185,7 +181,7 @@ impl RaftPeer {
         tracing::trace!(
             "SENDING APPEND-ENTRY <HEARTBEAT?> (req:{} -> {}) pli:({},{}) lc:{} {}",
             args.req_id,
-            fmt_id(&args.follower_id),
+            fmt_id(args.follower_uuid()),
             args.prev_log_term,
             args.prev_log_index,
             args.leader_commit,
@@ -220,11 +216,7 @@ impl RaftPeer {
         };
         *self.client.lock().await = None;
         if self.should_log_failure().await {
-            tracing::warn!(
-                "[peer-client {}][grpc append_entries] failed -> {}",
-                fmt_id(&self.id.to_string()),
-                err.to_string()
-            );
+            tracing::warn!("[peer-client {}][grpc append_entries] failed -> {}", fmt_id(&self.id), err.to_string());
         }
     }
 }

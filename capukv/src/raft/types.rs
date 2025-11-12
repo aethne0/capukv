@@ -20,7 +20,7 @@ pub(crate) enum RaftMessage {
     RequestVoteResponse(proto::VoteResponse),
     AppendEntriesResponse(proto::AppendEntriesResponse),
 
-    HeartbeatTimeout(String),
+    HeartbeatTimeout(uuid::Uuid),
     ElectionTimeout,
 
     SubmitWriteReq(proto::WriteOp, oneshot::Sender<Result<proto::WriteResp, RaftResponseError>>),
@@ -33,7 +33,7 @@ impl Display for RaftMessage {
             Self::RequestVote(req, _) => {
                 format!(
                     "[Vote REQ|{}:({})] term:{} last_log:({},{}) ",
-                    fmt_id(&req.candidate_id),
+                    fmt_id(req.candidate_uuid()),
                     req.req_id,
                     req.term,
                     req.last_log_term,
@@ -44,9 +44,9 @@ impl Display for RaftMessage {
             Self::AppendEntries(req, _) => {
                 format!(
                     "[Append entries REQ|{}:({}) -> {}] term:{} prev_log:({},{}) ldr_commit:{} entries:[{}..{}]({})",
-                    fmt_id(&req.leader_id),
+                    fmt_id(req.leader_uuid()),
                     req.req_id,
-                    fmt_id(&req.follower_id),
+                    fmt_id(req.leader_uuid()),
                     req.term,
                     req.prev_log_term,
                     req.prev_log_index,
@@ -58,7 +58,7 @@ impl Display for RaftMessage {
             }
 
             Self::ElectionTimeout => "Election timeout".to_string(),
-            Self::HeartbeatTimeout(id) => format!("Heartbeat timeout {}", fmt_id(&id)),
+            Self::HeartbeatTimeout(id) => format!("Heartbeat timeout {}", fmt_id(id)),
 
             Self::SubmitWriteReq(req, _) => format!("[Submit entry write-req] {:?}", req),
             Self::SubmitReadReq(req, _) => format!("[Submit entry read-req] {:?}", req),
@@ -66,9 +66,9 @@ impl Display for RaftMessage {
             Self::AppendEntriesResponse(req) => {
                 format!(
                     "[Append entries RESP|{}:({}) <- {}] term:{} success:{} entries:[{}..{}]({})",
-                    fmt_id(&req.leader_id),
+                    fmt_id(req.leader_uuid()),
                     req.req_id,
-                    fmt_id(&req.follower_id),
+                    fmt_id(req.follower_uuid()),
                     req.term,
                     req.success,
                     req.first_entry_index,
@@ -79,7 +79,7 @@ impl Display for RaftMessage {
             Self::RequestVoteResponse(req) => {
                 format!(
                     "[Vote RESP|{}:({})] term:{} granted:{}",
-                    fmt_id(&req.from_id),
+                    fmt_id(req.from_uuid()),
                     req.req_id,
                     req.term,
                     req.vote_granted

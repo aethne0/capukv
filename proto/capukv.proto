@@ -6,9 +6,9 @@ package capukv;
 Local
 ***************************************************************************** */
 message LocalEntry {
-  string id = 1;
+  bytes id = 1;
   uint64 term = 2;
-  optional string voted_for = 3;
+  optional bytes voted_for = 3;
 }
 
 /* *****************************************************************************
@@ -22,15 +22,16 @@ service RaftService {
 message AppendEntriesRequest {
   uint64 req_id = 1;
 
+  bytes leader_id = 3;
+  bytes follower_id = 8;
+
   uint64 term = 2;
-  string leader_id = 3;
-  string follower_id = 8;
   uint64 prev_log_index = 4;
   uint64 prev_log_term = 5;
   uint64 leader_commit = 6;
   repeated LogEntry entries = 7;
 
-  string leader_client_uri = 9;
+  string leader_api_uri = 9;
 }
 
 message AppendEntriesResponse {
@@ -40,9 +41,9 @@ message AppendEntriesResponse {
   // replicated from request
   uint64 req_id = 3;
   // replicated from request
-  string leader_id = 8;
+  bytes leader_id = 8;
   // recipient id, replicated from request
-  string follower_id = 10;
+  bytes follower_id = 10;
 
   // replicated from request
   uint64 prev_log_index = 4;
@@ -60,11 +61,11 @@ message VoteRequest {
   uint64 req_id = 1;
 
   uint64 term = 2;
-  string candidate_id = 3;
+  bytes candidate_id = 3;
   uint64 last_log_index = 4;
   uint64 last_log_term = 5;
 
-  string leader_client_uri = 6;
+  string leader_api_uri = 6;
 }
 
 message VoteResponse {
@@ -72,7 +73,7 @@ message VoteResponse {
 
   uint64 term = 2;
   bool vote_granted = 3;
-  string from_id = 4;
+  bytes from_id = 4;
 }
 
 /* *****************************************************************************

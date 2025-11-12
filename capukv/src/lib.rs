@@ -8,11 +8,11 @@ use crate::raft::Raft;
 
 pub struct ArgPeer {
     pub uri: String,
-    pub id: String,
+    pub id: uuid::Uuid,
 }
 
-pub(crate) fn fmt_id<T: ToString>(s: &T) -> String {
-    format!("{{{}}}", s.to_string())
+pub(crate) fn fmt_id(uuid: &uuid::Uuid) -> String {
+    format!("{{{}}}", uuid.as_hyphenated())
 }
 
 pub struct CapuKv {}
@@ -20,7 +20,7 @@ pub struct CapuKv {}
 impl CapuKv {
     #[must_use]
     pub async fn build_and_run(
-        id: String, path: &std::path::Path, addr: std::net::SocketAddr, peers: Vec<ArgPeer>, frontend_uri: String,
+        id: uuid::Uuid, path: &std::path::Path, addr: std::net::SocketAddr, peers: Vec<ArgPeer>, frontend_uri: String,
     ) -> Result<(), crate::Error> {
         // todo
         let frontend_addr = {

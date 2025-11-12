@@ -14,23 +14,23 @@ pub(crate) struct Persist {
 
 impl Persist {
     /// This will generate an id if we dont have one yet as well
-    pub(crate) fn new(id: String, db: Arc<rocksdb::DB>) -> Result<Self, crate::Error> {
+    pub(crate) fn new(id: uuid::Uuid, db: Arc<rocksdb::DB>) -> Result<Self, crate::Error> {
         let handle = db.cf_handle("local").unwrap();
 
-        let local_entry = match db.get_cf(&handle, &LOCAL_KEY)? {
+        let local = match db.get_cf(&handle, &LOCAL_KEY)? {
             Some(slice) => {
                 tracing::info!("Persistent state loaded");
                 proto::LocalEntry::decode(&slice as &[u8])?
             }
             None => {
                 tracing::info!("No persistent state found - initializing");
-                let local_entry = proto::LocalEntry { id, term: 0, voted_for: None };
+                let local_entry = proto::LocalEntry { id: id.as_bytes().to_vec(), term: 0, voted_for: None };
                 db.put_cf(handle, &LOCAL_KEY, local_entry.encode_to_vec())?;
                 local_entry
             }
         };
 
-        Ok(Self { db, local: local_entry })
+        Ok(Self { db, local })
     }
 
     pub(crate) fn save(&self) -> Result<(), crate::Error> {

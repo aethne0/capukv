@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use tokio::sync::{Mutex, MutexGuard, mpsc, oneshot};
+use uuid::Uuid;
 
 use crate::{
     fmt_id,
@@ -26,12 +27,12 @@ pub(crate) struct RaftInner {
     ///
     /// No need for this to be shared (arc etc) because it only will be changed by raft-msg handlers,
     /// which are processed serially.
-    peers: HashMap<String, Arc<Mutex<RaftPeer>>>,
+    peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>,
     /// Our frontend uri
     client_uri: String,
     /// current leaders uri, to the best of our knowledge
-    leader_client_uri: Option<String>, // uri
-    leader_client_id: Option<String>, // id
+    leader_api_uri: Option<String>, // uri
+    leader_client_id: Option<Uuid>, // id
 
     election_timer: Option<Timer>,
 
@@ -48,14 +49,14 @@ pub(crate) struct RaftInner {
 impl RaftInner {
     pub(crate) fn new(
         msg_tx: mpsc::Sender<RaftMessage>, msg_rx: mpsc::Receiver<RaftMessage>, persist: Persist,
-        peers: HashMap<String, Arc<Mutex<RaftPeer>>>, state_machine: Arc<StateMachine>, log: Arc<Log>,
+        peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>, state_machine: Arc<StateMachine>, log: Arc<Log>,
         client_uri: String,
     ) -> Self {
         Self {
             log,
             peers,
 
-            leader_client_uri: None,
+            leader_api_uri: None,
             leader_client_id: None,
 
             client_uri,
@@ -77,7 +78,7 @@ impl RaftInner {
         }
     }
 
-    fn update_known_leader(&mut self, leader_uri_id: Option<(String, String)>) {
+    fn update_known_leader(&mut self, leader_uri_id: Option<(String, Uuid)>) {
         if let Some((new_uri, new_id)) = &leader_uri_id {
             if self.leader_client_id.as_ref().is_none_or(|old_id| old_id != new_id) {
                 tracing::info!(
@@ -90,10 +91,10 @@ impl RaftInner {
         }
 
         if let Some((uri, id)) = leader_uri_id {
-            self.leader_client_uri = Some(uri);
+            self.leader_api_uri = Some(uri);
             self.leader_client_id = Some(id);
         } else {
-            self.leader_client_uri = None;
+            self.leader_api_uri = None;
             self.leader_client_id = None;
         }
     }
@@ -127,7 +128,7 @@ impl RaftInner {
         self.role = Role::Candidate;
         self.votes_received = 1;
 
-        self.leader_client_uri = None;
+        self.leader_api_uri = None;
 
         self.persist.local.term += 1;
         self.persist.local.voted_for = Some(self.persist.local.id.clone());
@@ -154,7 +155,7 @@ impl RaftInner {
 
         self.election_timer = None;
         self.role = Role::Leader;
-        self.leader_client_uri = None;
+        self.leader_api_uri = None;
 
         for (_, peer) in self.peers.iter() {
             let mut lock = peer.lock().await;
@@ -180,7 +181,7 @@ impl RaftInner {
     }
 
     /// Clears old timer and starts new heartbeat timer
-    fn new_heartbeat_timer(&self, id: String) -> Timer {
+    fn new_heartbeat_timer(&self, id: Uuid) -> Timer {
         assert_eq!(self.role, Role::Leader, "Only leader should be starting a heartbeat timer");
         let tx = self.msg_tx.clone();
         Timer::new(heartbeat_dur(), async move || {
@@ -243,12 +244,12 @@ impl RaftInner {
                     req_id: peer.next_req_id(),
                     term: self.persist.local.term,
                     leader_id: self.persist.local.id.clone(),
-                    follower_id: peer.id.clone(),
+                    follower_id: peer.id.into(),
                     prev_log_index,
                     prev_log_term,
                     leader_commit: commit_index,
                     entries: entries,
-                    leader_client_uri: self.client_uri.clone(),
+                    leader_api_uri: self.client_uri.clone(),
                 };
 
                 // todo make this less shit (just make an inflight-struct with (start..end) instead of entries)
@@ -340,13 +341,13 @@ impl RaftInner {
 
         while let Some(request_message) = self.msg_rx.recv().await {
             {
-                let voted_for_id = match &self.persist.local.voted_for {
+                let voted_for_id = match &self.persist.local.voted_for_uuid() {
                     Some(id) => fmt_id(id),
                     None => "[none]".into(),
                 };
                 tracing::trace!(
                     "{} (r-{}, t-{}, c-{}, l-{} v-{}) <- {}",
-                    fmt_id(&self.persist.local.id),
+                    fmt_id(self.persist.local.uuid()),
                     self.role,
                     self.persist.local.term,
                     self.state_machine.commit_index().await,
@@ -363,7 +364,7 @@ impl RaftInner {
                     // * if rpc req/resp has higher term than ours, convert to follower with newer term
                     if request.term > self.persist.local.term {
                         self.become_follower(request.term).await?;
-                        self.update_known_leader(Some((request.leader_client_uri.clone(), request.leader_id.clone())));
+                        self.update_known_leader(Some((request.leader_api_uri.clone(), request.leader_uuid().clone())));
                     }
 
                     // If we get a rpc from a "new leader" (which could have our same term) we step down
@@ -371,7 +372,7 @@ impl RaftInner {
                         && request.term >= self.persist.local.term
                     {
                         self.become_follower(request.term).await?;
-                        self.update_known_leader(Some((request.leader_client_uri.clone(), request.leader_id.clone())));
+                        self.update_known_leader(Some((request.leader_api_uri.clone(), request.leader_uuid().clone())));
                     }
 
                     // now we can just handle the request if we are follower, otherwise ignore
@@ -386,8 +387,8 @@ impl RaftInner {
 
                         // Otherwise current leader - reset election timer
                         self.new_election_timer();
-                        // this is our current leader, so we can set our leader_client_uri
-                        self.update_known_leader(Some((request.leader_client_uri.clone(), request.leader_id.clone())));
+                        // this is our current leader, so we can set our leader_api_uri
+                        self.update_known_leader(Some((request.leader_api_uri.clone(), request.leader_uuid().clone())));
 
                         // * Reply false if log doesnt contain an entry at prevLogIndex whose term matches prevLogTerm
                         if !self
@@ -430,7 +431,7 @@ impl RaftInner {
 
                     // to avoid processing late append-entries responses
                     if let Role::Leader = self.role {
-                        let Some(peer_client) = self.peers.get(&response.follower_id) else {
+                        let Some(peer_client) = self.peers.get(response.follower_uuid()) else {
                             unreachable!("Didn't have peer with id of responder??")
                         };
 
@@ -571,7 +572,7 @@ impl RaftInner {
                                 let id = self.persist.local.id.clone();
                                 let term = self.persist.local.term;
                                 let tx = self.msg_tx.clone();
-                                let leader_client_uri = self.client_uri.clone();
+                                let leader_api_uri = self.client_uri.clone();
 
                                 async move {
                                     let peer_lock = peer_client.lock().await;
@@ -583,7 +584,7 @@ impl RaftInner {
                                                 candidate_id: id,
                                                 last_log_index,
                                                 last_log_term,
-                                                leader_client_uri,
+                                                leader_api_uri,
                                             },
                                             tx,
                                         )
@@ -628,7 +629,7 @@ impl RaftInner {
                         let _ = reply_tx.send(Ok(self.state_machine.read_op(read_op).await));
                     }
                     Role::Candidate | Role::Follower => {
-                        let resp = match &self.leader_client_uri {
+                        let resp = match &self.leader_api_uri {
                             Some(uri) => Err(RaftResponseError::NotLeader { uri: uri.clone() }),
                             None => Err(RaftResponseError::NotReady),
                         };
@@ -670,7 +671,7 @@ impl RaftInner {
                             });
                         }
                         Role::Candidate | Role::Follower => {
-                            let resp = match &self.leader_client_uri {
+                            let resp = match &self.leader_api_uri {
                                 Some(uri) => Err(RaftResponseError::NotLeader { uri: uri.clone() }),
                                 None => Err(RaftResponseError::NotReady),
                             };

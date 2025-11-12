@@ -68,15 +68,18 @@ fn main() -> Result<(), capukv::Error> {
             // We convert the id from String->Uuid->String to ensure its a valid Uuid and that its
             // in canonical form. User can include/not-include the hyphens etc.
             // Past here we just use type: String instead, as usually its being ser/de anyway.
-            let id = Uuid::from_str(&id).expect("Invalid Uuid?").to_string();
+            let id = Uuid::from_str(&id).expect(&format!("Invalid Uuid? : {}", id));
             capukv::ArgPeer { uri, id }
         })
         .collect();
 
     init_logging();
 
-    let runtime =
-        tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Couldn't initialize runtime");
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4) // todo test
+        .enable_all()
+        .build()
+        .expect("Couldn't initialize runtime");
 
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, args.port));
     let uri = format!("http://{}", addr.to_string());
@@ -90,9 +93,11 @@ fn main() -> Result<(), capukv::Error> {
     tracing::info!("Api gRPC uri:  ---------- {}", frontend_uri);
     tracing::info!("Log dir: ----------- {}", &args.dir);
 
+    let our_uuid = uuid::Uuid::from_str(&args.id).expect(&format!("Invalid Uuid? : {}", &args.id));
+
     let dir = std::path::Path::new(&args.dir);
     runtime.block_on(async move {
-        capukv::CapuKv::build_and_run(args.id, dir, addr, peers, frontend_addr_str).await.unwrap();
+        capukv::CapuKv::build_and_run(our_uuid, dir, addr, peers, frontend_addr_str).await.unwrap();
     });
 
     Ok(())

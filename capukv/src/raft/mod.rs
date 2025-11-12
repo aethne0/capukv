@@ -42,7 +42,7 @@ pub(crate) struct Raft {
 impl Raft {
     #[must_use]
     pub(crate) async fn new(
-        id: String, path: &std::path::Path, mut peers: Vec<ArgPeer>, frontend_uri: String,
+        id: uuid::Uuid, path: &std::path::Path, mut peers: Vec<ArgPeer>, frontend_uri: String,
     ) -> Result<Self, crate::Error> {
         let db = get_db(path);
         let persist = Persist::new(id, db.clone())?;
@@ -50,7 +50,7 @@ impl Raft {
 
         let state_machine = Arc::new(StateMachine::new(log.clone()));
 
-        tracing::info!("Our ID: {} ({})", &persist.local.id, fmt_id(&persist.local.id));
+        tracing::info!("Our ID: {}", fmt_id(&persist.local.uuid()));
         tracing::info!("Starting with: {:?}", persist.local);
         if peers.len() > 0 {
             tracing::info!("Peers:",);
