@@ -1,19 +1,18 @@
 use std::sync::Arc;
 
-use monke::KiB;
 use rust_rocksdb as rocksdb;
 
 pub(crate) const LOCAL_HANDLE_NAME: &'static str = "local";
 pub(crate) const LOG_HANDLE_NAME: &'static str = "log";
 
-pub(crate) fn get_db(path: &std::path::Path) -> Arc<rocksdb::DB> {
+pub(crate) fn open_db(path: &std::path::Path) -> Arc<rocksdb::DB> {
     let mut opt = rocksdb::Options::default();
     opt.create_if_missing(true);
     opt.create_missing_column_families(true);
 
     let mut local_opts = rocksdb::Options::default();
     local_opts.set_compression_type(rocksdb::DBCompressionType::None);
-    local_opts.set_write_buffer_size(KiB!(1));
+    local_opts.set_write_buffer_size(monke::KiB!(1));
     local_opts.set_max_background_jobs(0);
     local_opts.increase_parallelism(1);
 

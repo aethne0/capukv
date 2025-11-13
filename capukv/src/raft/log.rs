@@ -6,7 +6,7 @@ use rust_rocksdb::{Direction, IteratorMode};
 
 use proto::LogEntry;
 
-use crate::raft::db::LOG_HANDLE_NAME;
+use crate::raft::db_open::LOG_HANDLE_NAME;
 
 fn ser_key(index: u64) -> Vec<u8> {
     index.to_be_bytes().to_vec()

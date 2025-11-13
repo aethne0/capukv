@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::{Mutex, mpsc, oneshot};
 
-mod db;
+mod db_open;
 mod log;
 mod node;
 mod persist;
@@ -16,8 +16,8 @@ use crate::{
     err::RaftResponseError,
     fmt_id,
     raft::{
-        db::get_db, log::Log, node::RaftInner, persist::Persist, state_machine::StateMachine, transport::RaftPeer,
-        types::RaftMessage,
+        db_open::open_db, log::Log, node::RaftInner, persist::Persist, state_machine::StateMachine,
+        transport::RaftPeer, types::RaftMessage,
     },
 };
 
@@ -44,7 +44,7 @@ impl Raft {
     pub(crate) async fn new(
         id: uuid::Uuid, path: &std::path::Path, mut peers: Vec<ArgPeer>, frontend_uri: String,
     ) -> Result<Self, crate::Error> {
-        let db = get_db(path);
+        let db = open_db(path);
         let persist = Persist::new(id, db.clone())?;
         let log = Arc::new(Log::new(db.clone())?);
 
