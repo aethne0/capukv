@@ -158,7 +158,9 @@ impl RaftPeer {
     pub(crate) async fn request_vote(&self, args: proto::VoteRequest, msg_tx: mpsc::Sender<RaftMessage>) {
         let err = match self.get_client().await {
             Ok(mut client) => {
-                let result = client.request_vote(args).await;
+                let mut req = tonic::Request::new(args);
+                req.set_timeout(Duration::from_millis(1000));
+                let result = client.request_vote(req).await;
 
                 match result {
                     Ok(result) => {
@@ -201,7 +203,9 @@ impl RaftPeer {
 
         let err = match self.get_client().await {
             Ok(mut client) => {
-                let result = client.append_entries(args).await;
+                let mut req = tonic::Request::new(args);
+                req.set_timeout(Duration::from_millis(1000));
+                let result = client.append_entries(req).await;
 
                 match result {
                     Ok(result) => {

@@ -397,40 +397,43 @@ impl RaftInner {
                         let term = self.persist.local.term;
 
                         // * reply false if term < currentTerm
-                        if term > request.term {
-                            reply_tx.send(proto::AppendEntriesResponse::from((&request, term, false))).unwrap();
-                            continue;
-                        }
-
-                        // Otherwise current leader - reset election timer
-                        self.new_election_timer();
-                        // this is our current leader, so we can set our leader_api_uri
-                        self.update_known_leader(Some((request.leader_api_uri.clone(), request.leader_uuid().clone())));
-
-                        // * Reply false if log doesnt contain an entry at prevLogIndex whose term matches prevLogTerm
-                        if !self
-                            .log
-                            .get(request.prev_log_index)?
-                            .is_some_and(|value| value.term == request.prev_log_term)
-                        {
-                            reply_tx.send(proto::AppendEntriesResponse::from((&request, term, false))).unwrap();
-                            continue;
-                        }
-
-                        // * We are not touching commit index if we did not receive any new entries (eg heartbeat)
-                        if !request.entries.is_empty() {
-                            let last_index_received = request.entries.last().unwrap().index;
-                            let new_commit_index = request.leader_commit.min(last_index_received);
-                            // construct here so we can move into add_logs_as_follower
-                            let resp = proto::AppendEntriesResponse::from((&request, term, true));
-                            self.add_logs_as_follower(request.entries).await?;
-                            self.state_machine.set_commit_index(new_commit_index).await;
-                            let _ = reply_tx.send(resp);
+                        let resp = if term > request.term {
+                            proto::AppendEntriesResponse::from((&request, term, false))
                         } else {
-                            self.state_machine
-                                .set_commit_index(request.leader_commit.min(request.prev_log_index))
-                                .await;
-                            let _ = reply_tx.send(proto::AppendEntriesResponse::from((&request, term, true)));
+                            // Otherwise current leader - reset election timer
+                            self.new_election_timer();
+                            // this is our current leader, so we can set our leader_api_uri
+                            self.update_known_leader(Some((
+                                request.leader_api_uri.clone(),
+                                request.leader_uuid().clone(),
+                            )));
+
+                            // * Reply false if log doesnt contain an entry at prevLogIndex whose term matches prevLogTerm
+                            if !self
+                                .log
+                                .get(request.prev_log_index)?
+                                .is_some_and(|value| value.term == request.prev_log_term)
+                            {
+                                proto::AppendEntriesResponse::from((&request, term, false))
+                            } else if !request.entries.is_empty() {
+                                // * We are not touching commit index if we did not receive any new entries (eg heartbeat)
+                                let last_index_received = request.entries.last().unwrap().index;
+                                let new_commit_index = request.leader_commit.min(last_index_received);
+                                // construct here so we can move into add_logs_as_follower
+                                let resp = proto::AppendEntriesResponse::from((&request, term, true));
+                                self.add_logs_as_follower(request.entries).await?;
+                                self.state_machine.set_commit_index(new_commit_index).await;
+                                resp
+                            } else {
+                                self.state_machine
+                                    .set_commit_index(request.leader_commit.min(request.prev_log_index))
+                                    .await;
+                                proto::AppendEntriesResponse::from((&request, term, true))
+                            }
+                        };
+
+                        if let Err(_e) = reply_tx.send(resp) {
+                            tracing::error!("Couldn't reply to append-entries");
                         }
                     }
                 }
@@ -507,15 +510,13 @@ impl RaftInner {
 
                     let req_id = request.req_id;
 
-                    match self.role {
+                    let resp = match self.role {
                         Role::Follower => {
                             let term = self.persist.local.term;
                             let from_id = self.persist.local.id.clone();
 
                             if request.term < self.persist.local.term {
-                                reply_tx
-                                    .send(proto::VoteResponse { req_id, term, vote_granted: false, from_id })
-                                    .unwrap();
+                                proto::VoteResponse { req_id, term, vote_granted: false, from_id }
                             } else if !(self.persist.local.voted_for.clone())
                                 .is_some_and(|id| id != request.candidate_id)
                                 && self
@@ -528,31 +529,24 @@ impl RaftInner {
                                 self.persist.save()?;
 
                                 self.new_election_timer();
-                                reply_tx
-                                    .send(proto::VoteResponse {
-                                        req_id,
-                                        term: request.term,
-                                        vote_granted: true,
-                                        from_id,
-                                    })
-                                    .unwrap();
+                                proto::VoteResponse { req_id, term: request.term, vote_granted: true, from_id }
                             } else {
-                                reply_tx
-                                    .send(proto::VoteResponse { req_id, term, vote_granted: false, from_id })
-                                    .unwrap();
+                                proto::VoteResponse { req_id, term, vote_granted: false, from_id }
                             }
                         }
                         Role::Candidate | Role::Leader => {
                             // same or lower term, so we don't grant a vote (we already voted for ourselves)
-                            reply_tx
-                                .send(proto::VoteResponse {
-                                    req_id,
-                                    term: self.persist.local.term,
-                                    vote_granted: false,
-                                    from_id: self.persist.local.id.clone(),
-                                })
-                                .unwrap();
+                            proto::VoteResponse {
+                                req_id,
+                                term: self.persist.local.term,
+                                vote_granted: false,
+                                from_id: self.persist.local.id.clone(),
+                            }
                         }
+                    };
+
+                    if let Err(_e) = reply_tx.send(resp) {
+                        tracing::error!("Couldn't reply to request-vote");
                     }
                 }
 
