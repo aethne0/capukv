@@ -65,6 +65,12 @@ impl From<tonic::Status> for crate::Error {
     }
 }
 
+impl From<tokio::time::error::Elapsed> for crate::Error {
+    fn from(value: tokio::time::error::Elapsed) -> Self {
+        crate::Error::Transport(value.to_string())
+    }
+}
+
 impl From<crate::Error> for tonic::Status {
     fn from(value: crate::Error) -> Self {
         match value {

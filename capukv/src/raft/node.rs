@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use tokio::sync::{Mutex, MutexGuard, mpsc, oneshot};
 use uuid::Uuid;
@@ -37,7 +41,11 @@ pub(crate) struct RaftInner {
     election_timer: Option<Timer>,
 
     role: Role,
+    // todo remove (just use [voted_for_by])
     votes_received: usize,
+    /// Keeps track fo who voted for us, so duplicate messages dont make us count a vote from the same node
+    /// twice
+    voted_for_by: HashSet<uuid::Uuid>,
 
     persist: Persist,
     log: Arc<Log>,
@@ -62,6 +70,7 @@ impl RaftInner {
             client_uri,
 
             votes_received: 0,
+            voted_for_by: HashSet::new(),
             persist,
             state_machine,
 
@@ -127,6 +136,7 @@ impl RaftInner {
 
         self.role = Role::Candidate;
         self.votes_received = 1;
+        self.voted_for_by.clear();
 
         self.leader_api_uri = None;
 
@@ -292,6 +302,13 @@ impl RaftInner {
             "maybe_commit should only be called by leader (others simply increase index)"
         );
         let mut match_indicies: Vec<u64> = vec![];
+
+        // todo make this not an edge case
+        if self.peers.is_empty() {
+            self.state_machine.set_commit_index(self.log.last_index()?).await;
+            return Ok(());
+        }
+
         for peer in self.peers.iter() {
             match_indicies.push(peer.1.lock().await.match_index);
         }
@@ -549,9 +566,12 @@ impl RaftInner {
                     if self.role == Role::Candidate {
                         // protect against old vote responses
                         if response.vote_granted && response.term == self.persist.local.term {
-                            self.votes_received += 1;
-                            if self.votes_received as usize > (self.peers.len() + 1) / 2 {
-                                self.become_leader().await?;
+                            if !self.voted_for_by.contains(response.from_uuid()) {
+                                self.votes_received += 1;
+                                self.voted_for_by.insert(response.from_uuid().clone());
+                                if self.votes_received as usize > (self.peers.len() + 1) / 2 {
+                                    self.become_leader().await?;
+                                }
                             }
                         }
                     }
@@ -656,16 +676,20 @@ impl RaftInner {
                                 }
                             }
 
+                            if self.peers.is_empty() {
+                                self.maybe_commit().await?;
+                            }
+
                             tokio::spawn(async move {
-                                let resp = if let Ok(rcv) = tokio::time::timeout(Duration::from_secs(3), reply_rx).await
-                                {
-                                    match rcv {
-                                        Err(e) => Err(RaftResponseError::Fail { msg: e.to_string() }),
-                                        Ok(client_resp) => Ok(client_resp),
-                                    }
-                                } else {
-                                    Err(RaftResponseError::Timeout)
-                                };
+                                let resp =
+                                    if let Ok(rcv) = tokio::time::timeout(Duration::from_secs(10), reply_rx).await {
+                                        match rcv {
+                                            Err(e) => Err(RaftResponseError::Fail { msg: e.to_string() }),
+                                            Ok(client_resp) => Ok(client_resp),
+                                        }
+                                    } else {
+                                        Err(RaftResponseError::Timeout)
+                                    };
 
                                 let _ = reply_tx.send(resp);
                             });

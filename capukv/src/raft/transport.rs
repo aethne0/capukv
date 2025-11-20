@@ -11,7 +11,7 @@ use crate::raft::timer::Timer;
 use crate::raft::types::RaftMessage;
 use crate::{fmt_id, raft};
 
-const CONNECT_TIMEOUT_MS: u64 = 500;
+const CONNECT_TIMEOUT_MS: u64 = 1500;
 
 type RaftTonicClient = proto::raft_service_client::RaftServiceClient<tonic::transport::Channel>;
 // todo refactor grpc+logging and raft state out from eachother here

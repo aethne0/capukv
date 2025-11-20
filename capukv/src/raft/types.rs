@@ -8,9 +8,6 @@ use tokio::sync::oneshot;
 
 use crate::{fmt_id, raft::RaftResponseError};
 
-// * Constants
-const BASE_HEARTBEAT: f64 = 0.3;
-pub(crate) const MAX_MSG_PER_APPEND_ENTRIES: u64 = 64;
 
 #[derive(Debug)]
 pub(crate) enum RaftMessage {
@@ -117,5 +114,9 @@ pub(crate) fn heartbeat_dur() -> Duration {
 }
 #[inline]
 pub(crate) fn election_dur() -> Duration {
-    Duration::from_secs_f64(BASE_HEARTBEAT * randrange(2.5, 5.0))
+    Duration::from_secs_f64(BASE_HEARTBEAT * randrange(5.0, 7.0))
 }
+
+// * Constants
+const BASE_HEARTBEAT: f64 = 0.5;
+pub(crate) const MAX_MSG_PER_APPEND_ENTRIES: u64 = 64;

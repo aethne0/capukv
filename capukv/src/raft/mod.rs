@@ -51,7 +51,15 @@ impl Raft {
         let state_machine = Arc::new(StateMachine::new(log.clone()));
 
         tracing::info!("Our ID: {}", fmt_id(&persist.local.uuid()));
-        tracing::info!("Starting with: {:?}", persist.local);
+        tracing::info!(
+            "{}",
+            format!(
+                "Starting with: id: {}, term: {}, voted_for: {}",
+                persist.local.uuid().as_hyphenated(),
+                persist.local.term,
+                persist.local.voted_for_uuid().map_or("None".to_string(), |u| u.as_hyphenated().to_string())
+            )
+        );
         if peers.len() > 0 {
             tracing::info!("Peers:",);
             for p in peers.iter() {
