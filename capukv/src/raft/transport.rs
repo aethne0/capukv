@@ -225,7 +225,6 @@ impl RaftPeer {
     }
 }
 
-// todo timeouts
 #[tonic::async_trait]
 impl proto::raft_service_server::RaftService for raft::SharedRaft {
     async fn append_entries(
@@ -244,6 +243,7 @@ impl proto::raft_service_server::RaftService for raft::SharedRaft {
         Ok(resp.into())
     }
 }
+
 struct LoggingMeta {
     last_logged: Option<Instant>,
     last_success: Option<Instant>,
