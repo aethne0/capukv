@@ -44,10 +44,7 @@ fn init_logging(_id: uuid::Uuid) {
     //     fmt::layer().with_file(false).with_line_number(false).with_target(false).with_ansi(true).without_time();
     let fmt_layer = fmt::layer().with_file(true).with_line_number(true).with_target(false).with_ansi(true);
 
-    //let troop_layer = capukv::logging::TroopTraceSubscriber::new(id, "http://0.0.0.0:8080/log".to_string());
-
     tracing_subscriber::registry().with(fmt_layer).with(filter).init();
-    //with(troop_layer)}
 }
 #[cfg(not(debug_assertions))]
 fn init_logging(_id: uuid::Uuid) {
@@ -101,7 +98,6 @@ fn main() -> Result<(), capukv::Error> {
         init_logging(our_uuid.clone());
         capukv::CapuKv::build_and_run(our_uuid, dir, addr, peers, frontend_addr_str).await.unwrap();
     });
-
 
     Ok(())
 }

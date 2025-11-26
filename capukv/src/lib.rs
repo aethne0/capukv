@@ -1,6 +1,5 @@
 mod api;
 mod err;
-pub mod logging;
 mod raft;
 
 pub use err::Error;
