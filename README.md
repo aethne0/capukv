@@ -26,7 +26,7 @@ A few implementation specific details:
 
 ## Why did you make this?
 
-I built **CapuKV** to learn more about distributed systems, databases, and systems programming, as well as deployment, orchestration, and a bit of larger system-design. It also serves as a metadata layer for a personal distributed object storage project.
+I built **CapuKV** to learn more about distributed systems, databases, and systems programming, as well as deployment, orchestration, and a bit of larger system-design. It also serves as a metadata layer for a [personal distributed object storage project](https://github.com/aethne0/banana-store).
 
 **CapuKV** is inspired by systems like [etcd](https://github.com/etcd-io/etcd), [TiKV](https://github.com/tikv/tikv) (both Raft based) and [HashiCorp’s Raft backend](https://github.com/hashicorp/raft), which provide a storage-backend for distributed databases like [TiDB](https://github.com/pingcap/tidb), or a consistent coordination layer for systems like [Kubernetes](https://kubernetes.io/) or various [HashiCorp](https://www.hashicorp.com/en) products ([Consul](https://www.hashicorp.com/en/products/consul), [Nomad](https://www.hashicorp.com/en/products/nomad), [Vault](https://www.hashicorp.com/en/products/vault)).
 
