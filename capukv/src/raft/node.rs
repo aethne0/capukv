@@ -416,7 +416,6 @@ impl RaftInner {
                             {
                                 proto::AppendEntriesResponse::from((&request, term, false))
                             } else if !request.entries.is_empty() {
-                                // * We are not touching commit index if we did not receive any new entries (eg heartbeat)
                                 let last_index_received = request.entries.last().unwrap().index;
                                 let new_commit_index = request.leader_commit.min(last_index_received);
                                 // construct here so we can move into add_logs_as_follower
