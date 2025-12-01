@@ -4,7 +4,7 @@
 
 While not production-ready, it has been tested against node failures and harsh network conditions like partitions, packet loss, reordering, message duplication, and latency spikes.
 
-![sample image](https://github.com/aethne0/capukv/tree/master/other/readmeclisample.png)
+![sample image](https://raw.githubusercontent.com/aethne0/capukv/refs/heads/master/other/readmeclisample.png)
 
 ## What does it do?
 
