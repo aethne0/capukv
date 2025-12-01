@@ -4,6 +4,8 @@
 
 While not production-ready, it has been tested against node failures and harsh network conditions like partitions, packet loss, reordering, message duplication, and latency spikes.
 
+![sample image](https://github.com/aethne0/capukv/tree/master/other/readmeclisample.png)
+
 ## What does it do?
 
 CapuKV is a key-value store that is _distributed_, meaning it runs on _cluster_ of computers instead of on a single machine. It provides two main things:
