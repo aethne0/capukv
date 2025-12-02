@@ -8,7 +8,7 @@ While not production-ready, it has been tested against node failures and harsh n
 
 ## What does it do?
 
-CapuKV is a key-value¹ store that is _distributed_, meaning it runs on _cluster_ of computers instead of on a single machine. It provides two main things:
+CapuKV is a key-value store¹ that is _distributed_, meaning it runs on _cluster_ of computers instead of on a single machine. It provides two main things:
 
 1. **Fault tolerance** – stays available and correct even during node or network failures (within reason).
 2. **Strong consistency** – behaves largely as if it were a single-threaded state machine (linearizability, isolation, ordering). This makes the system easier to reason about, less error prone and lets other layers relax their own consistency requirements, relying instead on this layer for coordination
