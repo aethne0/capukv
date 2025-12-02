@@ -8,12 +8,12 @@ While not production-ready, it has been tested against node failures and harsh n
 
 ## What does it do?
 
-CapuKV is a key-value store that is _distributed_, meaning it runs on _cluster_ of computers instead of on a single machine. It provides two main things:
+CapuKV is a key-value¹ store that is _distributed_, meaning it runs on _cluster_ of computers instead of on a single machine. It provides two main things:
 
 1. **Fault tolerance** – stays available and correct even during node or network failures (within reason).
 2. **Strong consistency** – behaves largely as if it were a single-threaded state machine (linearizability, isolation, ordering). This makes the system easier to reason about, less error prone and lets other layers relax their own consistency requirements, relying instead on this layer for coordination
 
-## How does it work?¹
+## How does it work?
 
 At the core of **CapuKV** is Raft, a distributed algorithm that allows a group of computers to continuously agree on some shared _log_. The _log_ is an ordered set of entries, each representing a single state change - for example, incrementing a shared counter or inserting a key-value pair. Because we can rely on Raft to ensure that each computer has the same _log_, each computer can independently apply the state changes recorded in the log sequentially to its own instance of the shared state machine. The state machine could be as simple as a single shared counter or lock, or as complex as a full-fledged database. In **CapuKV's** case it is comparable to an in-memory hashmap with a few additional features.
 
@@ -46,5 +46,4 @@ Some other real world examples of distributed consistent systems include:
 - **[CockroachDB](https://www.cockroachlabs.com/)**, a distributed SQL database that uses Raft
 
 ---
-
-_1. CapuKV was originally implemented using roughly three to seven small new-world monkeys, but testing would quickly result in the client receiving fictitious gRPC status codes like `17:INSUFFICIENT_BANANAS`, even under healthy network conditions._
+1. A _key-value store_ is a collection of data organized into _keys_ (labels for lookup) and _values_ (the data itself). An analogy would be a phonebook - the _keys_ would be peoples' names, and the _values_ would be the corresponding phone numbers. A _persistent_ key-value store's data is _persisted_ on disk - it lives on through restarts, crashes, and the like. Key-value stores are the basis for most databases, as well as many other applications.
