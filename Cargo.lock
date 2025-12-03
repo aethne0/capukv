@@ -211,24 +211,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "capukv-client"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "clap",
- "monke",
- "prost",
- "proto",
- "tonic",
- "tonic-build",
- "tonic-prost",
- "tonic-prost-build",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "cc"
 version = "1.2.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
