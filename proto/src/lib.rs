@@ -85,6 +85,10 @@ mod server {
         pub fn uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.id)
         }
+        #[inline]
+        pub fn peers(&self) -> Vec<(String, uuid::Uuid)> {
+            self.peers.iter().map(|p| (p.uri.clone(), read_uuid_unwrap(&p.id).clone())).collect()
+        }
     }
 
     // ! these macros rely on correct protobuf naming!

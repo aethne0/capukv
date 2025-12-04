@@ -2,6 +2,8 @@ mod api;
 mod err;
 mod raft;
 
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+
 pub use err::Error;
 
 use crate::raft::Raft;
@@ -20,32 +22,27 @@ pub struct CapuKv {}
 impl CapuKv {
     #[must_use]
     pub async fn build_and_run(
-        id: uuid::Uuid, path: &std::path::Path, addr: std::net::SocketAddr, peers: Vec<ArgPeer>, frontend_uri: String,
+        dir: PathBuf, raft_addr: SocketAddr, api_addr: SocketAddr, peer_uris: Vec<tonic::transport::Uri>,
     ) -> Result<(), crate::Error> {
-        // todo
-        let frontend_addr = {
-            use std::str::FromStr;
-            std::net::SocketAddr::from_str(&frontend_uri).unwrap()
-        };
-        let raft = std::sync::Arc::new(Raft::new(id, path, peers, frontend_uri).await?);
+        let raft_instance = Arc::new(Raft::new(&dir, raft_addr, api_addr, peer_uris).await?);
 
         let raft_handle = tokio::spawn({
-            let raft: crate::raft::SharedRaft = raft.clone().into();
+            let raft: crate::raft::SharedRaft = raft_instance.clone().into();
             async move {
                 tonic::transport::Server::builder()
                     .add_service(proto::raft_service_server::RaftServiceServer::new(raft))
-                    .serve(addr)
+                    .serve(raft_addr)
                     .await
                     .unwrap();
             }
         });
 
         let api_handle = tokio::spawn({
-            let raft: crate::raft::SharedRaft = raft.clone().into();
+            let raft: crate::raft::SharedRaft = raft_instance.clone().into();
             async move {
                 tonic::transport::Server::builder()
                     .add_service(proto::api_service_server::ApiServiceServer::new(raft))
-                    .serve(frontend_addr)
+                    .serve(api_addr)
                     .await
                     .unwrap();
             }

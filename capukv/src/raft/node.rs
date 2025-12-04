@@ -33,7 +33,7 @@ pub(crate) struct RaftInner {
     /// which are processed serially.
     peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>,
     /// Our frontend uri
-    client_uri: String,
+    api_uri: String,
     /// current leaders uri, to the best of our knowledge
     leader_api_uri: Option<String>, // uri
     leader_client_id: Option<Uuid>, // id
@@ -67,7 +67,7 @@ impl RaftInner {
             leader_api_uri: None,
             leader_client_id: None,
 
-            client_uri,
+            api_uri: client_uri,
 
             votes_received: 0,
             voted_for_by: HashSet::new(),
@@ -259,7 +259,7 @@ impl RaftInner {
                     prev_log_term,
                     leader_commit: commit_index,
                     entries: entries,
-                    leader_api_uri: self.client_uri.clone(),
+                    leader_api_uri: self.api_uri.clone(),
                 };
 
                 // todo make this less shit (just make an inflight-struct with (start..end) instead of entries)
@@ -585,7 +585,7 @@ impl RaftInner {
                                 let id = self.persist.local.id.clone();
                                 let term = self.persist.local.term;
                                 let tx = self.msg_tx.clone();
-                                let leader_api_uri = self.client_uri.clone();
+                                let leader_api_uri = self.api_uri.clone();
 
                                 async move {
                                     let peer_lock = peer_client.lock().await;

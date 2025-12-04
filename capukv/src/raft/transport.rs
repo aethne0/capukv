@@ -16,7 +16,7 @@ const CONNECT_TIMEOUT_MS: u64 = 1500;
 type RaftTonicClient = proto::raft_service_client::RaftServiceClient<tonic::transport::Channel>;
 // todo refactor grpc+logging and raft state out from eachother here
 pub(crate) struct RaftPeer {
-    pub(crate) uri: String,
+    pub(crate) uri: String, // TODO make uri type
     pub(crate) id: uuid::Uuid,
     client: Arc<Mutex<Option<RaftTonicClient>>>,
     pub(crate) next_index: u64,

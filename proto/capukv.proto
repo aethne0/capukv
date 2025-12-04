@@ -5,19 +5,33 @@ package capukv;
 /* *****************************************************************************
 Local
 ***************************************************************************** */
+message Peer {
+  bytes id = 1;
+  string uri = 2;
+}
+
 message LocalEntry {
   bytes id = 1;
   uint64 term = 2;
   optional bytes voted_for = 3;
+  repeated Peer peers = 4;
 }
 
 /* *****************************************************************************
 Raft
 ***************************************************************************** */
+service InitService {
+  rpc Greet(GreetRequest) returns (GreetResponse) {}
+}
+
 service RaftService {
   rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse) {}
   rpc RequestVote(VoteRequest) returns (VoteResponse) {}
 }
+
+// todo: mechanism to detect we are in a "different" cluster than we think
+message GreetRequest { bytes id = 1; }
+message GreetResponse { bytes id = 1; }
 
 message AppendEntriesRequest {
   uint64 req_id = 1;

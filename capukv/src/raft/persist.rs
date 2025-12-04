@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use prost::Message;
 use rust_rocksdb as rocksdb;
+use uuid::Uuid;
 
 const LOCAL_KEY: [u8; 4] = *b"capu";
 
@@ -14,7 +15,7 @@ pub(crate) struct Persist {
 
 impl Persist {
     /// This will generate an id if we dont have one yet as well
-    pub(crate) fn new(id: uuid::Uuid, db: Arc<rocksdb::DB>) -> Result<Self, crate::Error> {
+    pub(crate) fn new(db: Arc<rocksdb::DB>) -> Result<Self, crate::Error> {
         let handle = db.cf_handle("local").unwrap();
 
         let local = match db.get_cf(&handle, &LOCAL_KEY)? {
@@ -24,7 +25,9 @@ impl Persist {
             }
             None => {
                 tracing::info!("No persistent state found - initializing");
-                let local_entry = proto::LocalEntry { id: id.as_bytes().to_vec(), term: 0, voted_for: None };
+                let id = Uuid::new_v4();
+                let local_entry =
+                    proto::LocalEntry { id: id.as_bytes().to_vec(), term: 0, voted_for: None, peers: vec![] };
                 db.put_cf(handle, &LOCAL_KEY, local_entry.encode_to_vec())?;
                 local_entry
             }
