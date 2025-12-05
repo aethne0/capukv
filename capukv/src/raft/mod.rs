@@ -1,9 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use tokio::sync::{Mutex, mpsc, oneshot};
 
@@ -21,7 +16,7 @@ use crate::{
     err::RaftResponseError,
     fmt_id,
     raft::{
-        bootstrap::Bootstrapper, db_open::open_db, log::Log, node::RaftInner, persist::Persist,
+        bootstrap::bootstrap, db_open::open_db, log::Log, node::RaftInner, persist::Persist,
         state_machine::StateMachine, transport::RaftPeer, types::RaftMessage,
     },
 };
@@ -47,7 +42,7 @@ pub(crate) struct Raft {
 impl Raft {
     #[must_use]
     pub(crate) async fn new(
-        dir: &std::path::Path, raft_addr: SocketAddr, api_addr: SocketAddr, mut peer_uris: Vec<tonic::transport::Uri>,
+        dir: &std::path::Path, raft_addr: SocketAddr, api_addr: SocketAddr, peer_uris: Vec<tonic::transport::Uri>,
     ) -> Result<Self, crate::Error> {
         let db = open_db(dir);
         let mut persist = Persist::new(db.clone())?;
@@ -57,91 +52,7 @@ impl Raft {
         // strictly speaking this is not bulletproof, but we can improve later by making it commited into the log etc
         // for now i just wanted to reduce the complexity of the config (ie not specifying all the ids etc manually)
         if persist.local.peers.is_empty() {
-            tracing::info!("Starting bootstrapping server on {}...", raft_addr);
-            let expected = peer_uris.len();
-            let id = persist.local.id.clone();
-            let (tx, mut rx) = tokio::sync::mpsc::channel(expected);
-            let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-            let (peers_tx, mut peers_rx) = tokio::sync::mpsc::channel(expected);
-            let mut heard_from = HashSet::new();
-
-            let server_handle = tokio::spawn(async move {
-                tonic::transport::Server::builder()
-                    .add_service(proto::init_service_server::InitServiceServer::new(Bootstrapper {
-                        id,
-                        heard_from: tx,
-                    }))
-                    .serve_with_shutdown(raft_addr, async move {
-                        let _ = shutdown_rx.await;
-                    })
-                    .await
-                    .expect(&format!("Couldn't start cluster bootstrapping gRPC server on {} (raft-addr)", raft_addr))
-            });
-
-            for uri_outer in peer_uris.drain(..) {
-                tokio::spawn({
-                    let id = persist.local.id.clone();
-                    let peers_tx = peers_tx.clone();
-                    async move {
-                        loop {
-                            let uri = uri_outer.clone();
-                            let id = id.clone();
-
-                            match tokio::time::timeout(Duration::from_secs(2), async move {
-                                proto::init_service_client::InitServiceClient::connect(uri.clone()).await
-                            })
-                            .await
-                            {
-                                Ok(Ok(mut client)) => match client.greet(proto::GreetRequest { id }).await {
-                                    Ok(resp) => {
-                                        let _ = peers_tx.send((uri_outer, resp.into_inner().id)).await;
-                                        break;
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!(
-                                            "Couldn't contact peer ({}) while bootstrapping: {}",
-                                            &uri_outer,
-                                            e
-                                        );
-                                        tokio::time::sleep(Duration::from_secs(1)).await;
-                                    }
-                                },
-                                Err(e) => {
-                                    tracing::warn!("Couldn't contact peer ({}) while bootstrapping: {}", &uri_outer, e);
-                                }
-                                Ok(Err(e)) => {
-                                    tracing::warn!("Couldn't contact peer ({}) while bootstrapping: {}", &uri_outer, e);
-                                    tokio::time::sleep(Duration::from_secs(1)).await;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            let mut peers = vec![];
-            while let Some((uri, id)) = peers_rx.recv().await {
-                tracing::info!("Contacted peer at {}", &uri);
-                peers.push(proto::Peer { uri: uri.to_string(), id });
-                if peers.len() == expected {
-                    break;
-                }
-            }
-
-            persist.local.peers = peers;
-            persist.save()?;
-
-            while let Some(rcvd) = rx.recv().await {
-                tracing::info!("Heard from peer at {}", uuid::Uuid::from_slice(&rcvd).unwrap());
-                heard_from.insert(rcvd);
-                if heard_from.len() == expected {
-                    // everyone has pinged us, so we can close server
-                    let _ = shutdown_tx.send(());
-                    break;
-                }
-            }
-
-            let _ = server_handle.await; // wait for server to close, because we need the port back:W
+            bootstrap(peer_uris, raft_addr, &mut persist).await?;
         }
 
         let state_machine = Arc::new(StateMachine::new(log.clone()));
@@ -166,8 +77,10 @@ impl Raft {
 
         let mut peers_map = HashMap::new();
         for (uri, uuid) in persist.local.peers() {
-            let peer = RaftPeer::new(uri, uuid);
-            peers_map.insert(uuid, Arc::new(Mutex::new(peer)));
+            if uuid != *persist.local.uuid() {
+                let peer = RaftPeer::new(uri, uuid);
+                peers_map.insert(uuid, Arc::new(Mutex::new(peer)));
+            }
         }
 
         let mut inner = RaftInner::new(
