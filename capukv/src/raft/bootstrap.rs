@@ -61,25 +61,24 @@ pub(crate) async fn bootstrap(
                     let uri = uri_outer.clone();
                     let id = id.clone();
 
-                    match tokio::time::timeout(Duration::from_secs(2), async move {
-                        proto::init_service_client::InitServiceClient::connect(uri.clone()).await
-                    })
-                    .await
-                    {
-                        Ok(Ok(mut client)) => match client.greet(proto::GreetRequest { id }).await {
-                            Ok(resp) => {
-                                let _ = peers_tx.send((uri_outer, resp.into_inner().id)).await;
-                                break;
-                            }
-                            Err(e) => {
-                                tracing::warn!("Couldn't contact peer ({}) while bootstrapping: {}", &uri_outer, e);
-                                tokio::time::sleep(Duration::from_secs(1)).await;
-                            }
-                        },
-                        Err(e) => {
-                            tracing::warn!("Couldn't contact peer ({}) while bootstrapping: {}", &uri_outer, e);
+                    match {
+                        async {
+                            let res = tokio::time::timeout(Duration::from_secs(2), async move {
+                                proto::init_service_client::InitServiceClient::connect(uri.clone()).await
+                            })
+                            .await
+                            .map_err(|e| e.to_string())?;
+                            let mut client = res.map_err(|e| e.to_string())?;
+                            let res = client.greet(proto::GreetRequest { id }).await.map_err(|e| e.to_string())?;
+                            Ok::<Vec<u8>, String>(res.into_inner().id)
                         }
-                        Ok(Err(e)) => {
+                        .await
+                    } {
+                        Ok(id) => {
+                            let _ = peers_tx.send((uri_outer, id)).await;
+                            break;
+                        }
+                        Err(e) => {
                             tracing::warn!("Couldn't contact peer ({}) while bootstrapping: {}", &uri_outer, e);
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
