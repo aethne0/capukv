@@ -1,6 +1,6 @@
 # CapuKV
 
-## **[Usage and docs](https://github.com/aethne0/capukv/blob/master/docs/usage-server.md)**
+**[Usage and docs](https://github.com/aethne0/capukv/blob/master/docs/usage-server.md)**
 
 ---
 
