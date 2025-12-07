@@ -1,5 +1,7 @@
 # CapuKV
 
+**[Usage and docs](https://github.com/aethne0/capukv/blob/master/docs/usage-server.md)**
+
 **CapuKV** is a small, strongly-consistent, fault-tolerant distributed key-value store built on my own implementation of the [Raft consensus algorithm](https://raft.github.io/). It uses [Rust](https://rust-lang.org/), [tokio](https://tokio.rs/), [gRPC](https://grpc.io/), [Protocol Buffers](https://protobuf.dev/), and [RocksDB](https://rocksdb.org/), and is currently deployed at home with [Docker](https://www.docker.com/), [Nomad](https://www.hashicorp.com/en/products/nomad), [Consul](https://www.hashicorp.com/en/products/consul), and [Traefik](https://traefik.io/traefik).
 
 While not production-ready, it has been tested against node failures and harsh network conditions like partitions, packet loss, reordering, message duplication, and latency spikes.
@@ -38,7 +40,6 @@ Distributed systems often rely on a consistent, authoritative layer to maintain 
 
 By providing strong consistency, something like **CapuKV** allows other parts of the system to relax their own consistency requirements, reducing coordination overhead where possible. This makes the system easier to reason about, and helps to free high-throughput components to operate more performantly without sacrificing correctness.
 
-
 Some other real world examples of such systems, or systems that rely on such a layer, include:
 
 - **[Google Chubby](https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf)**, a distributed lock service that uses Paxos
@@ -47,4 +48,5 @@ Some other real world examples of such systems, or systems that rely on such a l
 - **[CockroachDB](https://www.cockroachlabs.com/)**, a distributed SQL database that uses Raft
 
 ---
+
 1. A _key-value store_ is a collection of data organized into _keys_ (labels for lookup) and _values_ (the data itself). An analogy would be a phonebook - the _keys_ would be peoples' names, and the _values_ would be the corresponding phone numbers. A _persistent_ key-value store's data is _persisted_ on disk - it lives on through restarts, crashes, and the like. Key-value stores are the basis for most databases, as well as many other applications.
