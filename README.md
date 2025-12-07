@@ -8,7 +8,7 @@
 
 While not production-ready, it has been tested against node failures and harsh network conditions like partitions, packet loss, reordering, message duplication, and latency spikes.
 
-![sample image](https://git.monke.ca/monke/capukv/raw/branch/master/other/readmeclisample.png)
+![sample image](https://git.monke.ca/monke/capukv/raw/branch/master/docs/readmeclisample.png)
 
 ## What does it do?
 
