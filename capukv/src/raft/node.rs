@@ -33,7 +33,7 @@ pub(crate) struct RaftInner {
     /// which are processed serially.
     peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>,
     /// Our frontend uri
-    api_uri: String,
+    redirect_uri: Option<tonic::transport::Uri>,
     /// current leaders uri, to the best of our knowledge
     leader_api_uri: Option<String>, // uri
     leader_client_id: Option<Uuid>, // id
@@ -58,7 +58,7 @@ impl RaftInner {
     pub(crate) fn new(
         msg_tx: mpsc::Sender<RaftMessage>, msg_rx: mpsc::Receiver<RaftMessage>, persist: Persist,
         peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>, state_machine: Arc<StateMachine>, log: Arc<Log>,
-        client_uri: String,
+        redirect_uri: Option<tonic::transport::Uri>,
     ) -> Self {
         Self {
             log,
@@ -67,7 +67,7 @@ impl RaftInner {
             leader_api_uri: None,
             leader_client_id: None,
 
-            api_uri: client_uri,
+            redirect_uri,
 
             votes_received: 0,
             voted_for_by: HashSet::new(),
@@ -87,20 +87,20 @@ impl RaftInner {
         }
     }
 
-    fn update_known_leader(&mut self, leader_uri_id: Option<(String, Uuid)>) {
+    fn update_known_leader(&mut self, leader_uri_id: Option<(Option<String>, Uuid)>) {
         if let Some((new_uri, new_id)) = &leader_uri_id {
             if self.leader_client_id.as_ref().is_none_or(|old_id| old_id != new_id) {
                 tracing::info!(
                     "New leader {} known with uri {} (term: {})",
                     fmt_id(&new_id),
-                    &new_uri,
+                    &new_uri.clone().unwrap_or("<none>".to_string()),
                     self.persist.local.term
                 );
             }
         }
 
         if let Some((uri, id)) = leader_uri_id {
-            self.leader_api_uri = Some(uri);
+            self.leader_api_uri = uri;
             self.leader_client_id = Some(id);
         } else {
             self.leader_api_uri = None;
@@ -259,7 +259,7 @@ impl RaftInner {
                     prev_log_term,
                     leader_commit: commit_index,
                     entries: entries,
-                    leader_api_uri: self.api_uri.clone(),
+                    leader_api_uri: self.redirect_uri.clone().map(|v| v.to_string()),
                 };
 
                 // todo make this less shit (just make an inflight-struct with (start..end) instead of entries)
@@ -585,7 +585,7 @@ impl RaftInner {
                                 let id = self.persist.local.id.clone();
                                 let term = self.persist.local.term;
                                 let tx = self.msg_tx.clone();
-                                let leader_api_uri = self.api_uri.clone();
+                                let leader_api_uri = self.redirect_uri.clone();
 
                                 async move {
                                     let peer_lock = peer_client.lock().await;
@@ -597,7 +597,7 @@ impl RaftInner {
                                                 candidate_id: id,
                                                 last_log_index,
                                                 last_log_term,
-                                                leader_api_uri,
+                                                leader_api_uri: leader_api_uri.map(|v| v.to_string()),
                                             },
                                             tx,
                                         )

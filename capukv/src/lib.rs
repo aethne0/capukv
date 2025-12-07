@@ -23,8 +23,9 @@ impl CapuKv {
     #[must_use]
     pub async fn build_and_run(
         dir: PathBuf, raft_addr: SocketAddr, api_addr: SocketAddr, peer_uris: Vec<tonic::transport::Uri>,
+        redirect_uri: Option<tonic::transport::Uri>,
     ) -> Result<(), crate::Error> {
-        let raft_instance = Arc::new(Raft::new(&dir, raft_addr, api_addr, peer_uris).await?);
+        let raft_instance = Arc::new(Raft::new(&dir, raft_addr, peer_uris, redirect_uri).await?);
 
         let raft_handle = tokio::spawn({
             let raft: crate::raft::SharedRaft = raft_instance.clone().into();

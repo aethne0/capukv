@@ -15,7 +15,7 @@ use std::{collections::HashSet, net::SocketAddr, time::Duration};
 
 use tonic::{Request, Response, Result};
 
-use crate::raft;
+use crate::{fmt_id, raft};
 pub(crate) struct Bootstrapper {
     pub(crate) id: Vec<u8>,
     /// A uuid (bytes)
@@ -102,11 +102,8 @@ pub(crate) async fn bootstrap(
         }
     }
 
-    persist.local.peers = peers;
-    persist.save()?;
-
     while let Some(rcvd) = rx.recv().await {
-        tracing::info!("BOOTSTRAPPING: Heard from peer {}", uuid::Uuid::from_slice(&rcvd).unwrap());
+        tracing::info!("BOOTSTRAPPING: Heard from peer {}", fmt_id(&uuid::Uuid::from_slice(&rcvd).unwrap()));
         heard_from.insert(rcvd);
         if heard_from.len() == expected {
             // everyone has pinged us, so we can close server
@@ -114,6 +111,10 @@ pub(crate) async fn bootstrap(
             break;
         }
     }
+
+    // only save once everything is successful
+    persist.local.peers = peers;
+    persist.save()?;
 
     let _ = server_handle.await; // wait for server to close, because we need the port back:W
 

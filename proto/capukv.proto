@@ -45,7 +45,7 @@ message AppendEntriesRequest {
   uint64 leader_commit = 6;
   repeated LogEntry entries = 7;
 
-  string leader_api_uri = 9;
+  optional string leader_api_uri = 9;
 }
 
 message AppendEntriesResponse {
@@ -79,7 +79,7 @@ message VoteRequest {
   uint64 last_log_index = 4;
   uint64 last_log_term = 5;
 
-  string leader_api_uri = 6;
+  optional string leader_api_uri = 6;
 }
 
 message VoteResponse {

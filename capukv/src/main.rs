@@ -24,7 +24,7 @@ struct Args {
 
     /// this node's uri for redirects
     #[arg(long)]
-    redirect_uri: Option<String>,
+    redirect_uri: Option<tonic::transport::Uri>,
 
     /// raft grpc uri
     #[arg(short, long)]
@@ -125,7 +125,7 @@ fn main() -> Result<(), capukv::Error> {
             }
         };
 
-        capukv::CapuKv::build_and_run(args.dir, args.raft_addr, args.api_addr, peers).await.unwrap();
+        capukv::CapuKv::build_and_run(args.dir, args.raft_addr, args.api_addr, peers, args.redirect_uri).await.unwrap();
     });
 
     Ok(())

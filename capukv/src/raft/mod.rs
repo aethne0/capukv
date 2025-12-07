@@ -42,7 +42,8 @@ pub(crate) struct Raft {
 impl Raft {
     #[must_use]
     pub(crate) async fn new(
-        dir: &std::path::Path, raft_addr: SocketAddr, api_addr: SocketAddr, peer_uris: Vec<tonic::transport::Uri>,
+        dir: &std::path::Path, raft_addr: SocketAddr, peer_uris: Vec<tonic::transport::Uri>,
+        redirect_uri: Option<tonic::transport::Uri>,
     ) -> Result<Self, crate::Error> {
         let db = open_db(dir);
         let mut persist = Persist::new(db.clone())?;
@@ -83,21 +84,7 @@ impl Raft {
             }
         }
 
-        let mut inner = RaftInner::new(
-            msg_tx.clone(),
-            msg_rx,
-            persist,
-            peers_map,
-            state_machine,
-            log,
-            tonic::transport::Uri::builder()
-                .scheme("http")
-                .authority(api_addr.to_string())
-                .path_and_query("/")
-                .build()
-                .unwrap()
-                .to_string(),
-        );
+        let mut inner = RaftInner::new(msg_tx.clone(), msg_rx, persist, peers_map, state_machine, log, redirect_uri);
 
         tokio::spawn(async move { inner.run().await });
 
