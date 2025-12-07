@@ -51,7 +51,7 @@ SRV capukv.service.consul. 0s   1 1 "0a02101b.addr.monke-ca-toronto-01.consul.":
 
 ### `--dir`
 
-The directory that all persistent state will be kept in by CapuKV. If you start CapuKV pointing at a directory that already has CapuKV state in it, CapuKV will simply resume from that state. If you want to "copy" a CapuKV instance from one machine to another you simply have to copy and transfer this entire directory.
+The directory that all persistent state will be kept in by CapuKV. If you start CapuKV pointing at a directory that already has CapuKV state in it, CapuKV will simply resume from that state. If you want to "move" a CapuKV instance from one machine to another you simply have to copy and transfer this entire directory.
 
 ### `--api-addr`
 
