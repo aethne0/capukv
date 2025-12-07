@@ -1,6 +1,8 @@
 # CapuKV
 
-**[Usage and docs](https://github.com/aethne0/capukv/blob/master/docs/usage-server.md)**
+## **[Usage and docs](https://github.com/aethne0/capukv/blob/master/docs/usage-server.md)**
+
+---
 
 **CapuKV** is a small, strongly-consistent, fault-tolerant distributed key-value store built on my own implementation of the [Raft consensus algorithm](https://raft.github.io/). It uses [Rust](https://rust-lang.org/), [tokio](https://tokio.rs/), [gRPC](https://grpc.io/), [Protocol Buffers](https://protobuf.dev/), and [RocksDB](https://rocksdb.org/), and is currently deployed at home with [Docker](https://www.docker.com/), [Nomad](https://www.hashicorp.com/en/products/nomad), [Consul](https://www.hashicorp.com/en/products/consul), and [Traefik](https://traefik.io/traefik).
 
