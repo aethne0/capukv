@@ -22,6 +22,10 @@ struct Args {
     #[arg(long)]
     dns: Option<String>,
 
+    /// this node's uri for redirects
+    #[arg(long)]
+    redirect_uri: Option<String>,
+
     /// raft grpc uri
     #[arg(short, long)]
     raft_addr: SocketAddr,
