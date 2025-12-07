@@ -1,6 +1,6 @@
 # CapuKV
 
-**[Usage and docs](https://github.com/aethne0/capukv/blob/master/docs/usage-server.md)**
+**[Usage and docs](https://git.monke.ca/monke/capukv/src/branch/master/docs/usage-server.md)**
 
 ---
 
@@ -8,7 +8,7 @@
 
 While not production-ready, it has been tested against node failures and harsh network conditions like partitions, packet loss, reordering, message duplication, and latency spikes.
 
-![sample image](https://raw.githubusercontent.com/aethne0/capukv/refs/heads/master/other/readmeclisample.png)
+![sample image](https://git.monke.ca/monke/capukv/raw/branch/master/other/readmeclisample.png)
 
 ## What does it do?
 
@@ -21,7 +21,7 @@ CapuKV is a key-value store¹ that is _distributed_, meaning it runs on _cluster
 
 At the core of **CapuKV** is Raft, a distributed algorithm that allows a group of computers to continuously agree on some shared _log_. The _log_ is an ordered set of entries, each representing a single state change. For example, incrementing a shared counter or inserting a key-value pair. Because we can rely on Raft to ensure that each computer has the same _log_, each computer can independently apply the state changes recorded in the _log_ sequentially to its own instance of the shared state machine. The state machine could be as simple as a single shared counter or lock, or as complex as a full-fledged database. In **CapuKV's** case it corresponds to a key-value store.
 
-CapuKV has a message-bus-based [Raft core](https://github.com/aethne0/capukv/blob/master/capukv/src/raft/node.rs) that asynchronously handles, receives and sends out Raft messages to peers. The log entries, once committed by the Raft algorithm, are then applied to a state machine. Client requests are served by coordinating with the cluster, appending log entries to the log, and writing to (or reading from) the state machine. Reads can also skip the coordination step, which decreases latency but also forfeits linearizability gaurantees.
+CapuKV has a message-bus-based [Raft core](https://git.monke.ca/monke/capukv/src/branch/master/capukv/src/raft/node.rs) that asynchronously handles, receives and sends out Raft messages to peers. The log entries, once committed by the Raft algorithm, are then applied to a state machine. Client requests are served by coordinating with the cluster, appending log entries to the log, and writing to (or reading from) the state machine. Reads can also skip the coordination step, which decreases latency but also forfeits linearizability gaurantees.
 
 A few implementation specific details:
 
