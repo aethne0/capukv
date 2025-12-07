@@ -27,3 +27,4 @@ rust-rocksdb = { workspace = true, features = ["jemalloc"] }
 rustc-hash = { workspace = true }
 rand = { workspace = true }
 reqwest = { version = "0.12.24" }
+hickory-resolver = "0.25.2"

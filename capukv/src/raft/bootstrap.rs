@@ -34,7 +34,7 @@ impl proto::init_service_server::InitService for Bootstrapper {
 pub(crate) async fn bootstrap(
     mut peer_uris: Vec<tonic::transport::Uri>, raft_addr: SocketAddr, persist: &mut raft::Persist,
 ) -> Result<(), crate::Error> {
-    tracing::info!("Starting bootstrapping server on {}...", raft_addr);
+    tracing::info!("BOOTSTRAPPING: Starting bootstrapping server on {}...", raft_addr);
     let expected = peer_uris.len();
     let id = persist.local.id.clone();
     let (tx, mut rx) = tokio::sync::mpsc::channel(expected);
@@ -79,7 +79,12 @@ pub(crate) async fn bootstrap(
                             break;
                         }
                         Err(e) => {
-                            tracing::warn!("Couldn't contact peer ({}) while bootstrapping: {}", &uri_outer, e);
+                            // todo only give warnings after x seconds of trying
+                            tracing::warn!(
+                                "BOOTSTRAPPING: Couldn't contact peer ({}) while bootstrapping: {}",
+                                &uri_outer,
+                                e
+                            );
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
                     }
@@ -90,7 +95,7 @@ pub(crate) async fn bootstrap(
 
     let mut peers = vec![];
     while let Some((uri, id)) = peers_rx.recv().await {
-        tracing::info!("Contacted peer at {}", &uri);
+        tracing::info!("BOOTSTRAPPING: Contacted peer at {}", &uri);
         peers.push(proto::Peer { uri: uri.to_string(), id });
         if peers.len() == expected {
             break;
@@ -101,7 +106,7 @@ pub(crate) async fn bootstrap(
     persist.save()?;
 
     while let Some(rcvd) = rx.recv().await {
-        tracing::info!("Heard from peer {}", uuid::Uuid::from_slice(&rcvd).unwrap());
+        tracing::info!("BOOTSTRAPPING: Heard from peer {}", uuid::Uuid::from_slice(&rcvd).unwrap());
         heard_from.insert(rcvd);
         if heard_from.len() == expected {
             // everyone has pinged us, so we can close server
