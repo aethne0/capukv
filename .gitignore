@@ -3,3 +3,4 @@ notes.md
 /data
 con.sh
 Cargo.lock
+dockerize.fish

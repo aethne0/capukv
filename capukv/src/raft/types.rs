@@ -8,7 +8,6 @@ use tokio::sync::oneshot;
 
 use crate::{fmt_id, raft::RaftResponseError};
 
-
 #[derive(Debug)]
 pub(crate) enum RaftMessage {
     RequestVote(proto::VoteRequest, oneshot::Sender<proto::VoteResponse>),
@@ -104,6 +103,10 @@ impl Display for Role {
     }
 }
 
+// * Constants
+const BASE_HEARTBEAT: f64 = 0.3;
+pub(crate) const MAX_MSG_PER_APPEND_ENTRIES: u64 = 64; // todo by content length
+
 #[inline]
 fn randrange(min: f64, max: f64) -> f64 {
     rand::rng().random_range(min..=max)
@@ -114,9 +117,5 @@ pub(crate) fn heartbeat_dur() -> Duration {
 }
 #[inline]
 pub(crate) fn election_dur() -> Duration {
-    Duration::from_secs_f64(BASE_HEARTBEAT * randrange(5.0, 7.0))
+    Duration::from_secs_f64(BASE_HEARTBEAT * randrange(4.0, 8.0))
 }
-
-// * Constants
-const BASE_HEARTBEAT: f64 = 0.5;
-pub(crate) const MAX_MSG_PER_APPEND_ENTRIES: u64 = 64;

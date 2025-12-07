@@ -177,7 +177,11 @@ impl RaftInner {
 
         self.broadcast_elected_heartbeat().await?;
 
-        tracing::info!("Became LEADER (term: {})", self.persist.local.term);
+        tracing::info!(
+            "Became LEADER (term: {}) (API-URI: {})",
+            self.persist.local.term,
+            self.redirect_uri.clone().map_or("<none>".to_string(), |v| v.to_string())
+        );
         Ok(())
     }
 
