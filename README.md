@@ -6,7 +6,9 @@
 
 ---
 
-<img src="https://monke.ca/assets/monke-square.webp" align="center" alt="capu"/>
+<p align="center">
+    <img src="https://monke.ca/assets/monke-square.webp" alt="capu"/>
+</p>
 
 **capukv** is a small, strongly-consistent, fault-tolerant, distributed key-value store built using an implementation of the [Raft consensus algorithm](https://raft.github.io/raft.pdf). While not production-ready, it has been tested against node failures and harsh network conditions like partitions, packet loss, reordering, message duplication, and latency spikes.
 
