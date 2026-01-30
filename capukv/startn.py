@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+# just used for local testing, dont look :)
+
 import subprocess
 import sys
 
