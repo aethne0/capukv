@@ -11,7 +11,7 @@
 ///
 /// This is definitely not totally foolproof, but is acceptable for now as its just a one-time thing.
 /// Can improve in the future (especially when cluster-membership-change support added to the raft section)
-use std::{collections::HashSet, net::SocketAddr, time::Duration};
+use std::{boxed, collections::HashSet, net::SocketAddr, slice, time::Duration};
 
 use tonic::{Request, Response, Result};
 

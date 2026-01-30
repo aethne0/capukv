@@ -1,6 +1,7 @@
 [workspace]
 members = ["capukv", "proto"]
 resolver = "3"
+edition = "2024"
 
 [workspace.dependencies]
 monke = { git = "https://github.com/aethne0/monke-util", branch = "master" }
