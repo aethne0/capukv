@@ -226,7 +226,7 @@ impl RaftPeer {
 }
 
 #[tonic::async_trait]
-impl proto::raft_service_server::RaftService for raft::SharedRaft {
+impl proto::raft_service_server::RaftService for &'static raft::Raft {
     async fn append_entries(
         &self, req: Request<proto::AppendEntriesRequest>,
     ) -> Result<Response<proto::AppendEntriesResponse>> {

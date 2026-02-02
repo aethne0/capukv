@@ -2,7 +2,11 @@ mod api;
 mod err;
 mod raft;
 
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{OnceLock},
+};
 
 pub use err::Error;
 
@@ -19,19 +23,25 @@ pub(crate) fn fmt_id(uuid: &uuid::Uuid) -> String {
 
 pub struct CapuKv {}
 
+static RAFT_INSTANCE: OnceLock<Raft> = OnceLock::new();
+
 impl CapuKv {
     #[must_use]
     pub async fn build_and_run(
-        dir: PathBuf, raft_addr: SocketAddr, api_addr: SocketAddr, peer_uris: Vec<tonic::transport::Uri>,
+        dir: PathBuf,
+        raft_addr: SocketAddr,
+        api_addr: SocketAddr,
+        peer_uris: Vec<tonic::transport::Uri>,
         redirect_uri: Option<tonic::transport::Uri>,
     ) -> Result<(), crate::Error> {
-        let raft_instance = Arc::new(Raft::new(&dir, raft_addr, peer_uris, redirect_uri).await?);
+        let _ = RAFT_INSTANCE.set(Raft::new(&dir, raft_addr, peer_uris, redirect_uri).await?);
 
         let raft_handle = tokio::spawn({
-            let raft: crate::raft::SharedRaft = raft_instance.clone().into();
             async move {
                 tonic::transport::Server::builder()
-                    .add_service(proto::raft_service_server::RaftServiceServer::new(raft))
+                    .add_service(proto::raft_service_server::RaftServiceServer::new(
+                        RAFT_INSTANCE.get().unwrap(),
+                    ))
                     .serve(raft_addr)
                     .await
                     .unwrap();
@@ -39,10 +49,11 @@ impl CapuKv {
         });
 
         let api_handle = tokio::spawn({
-            let raft: crate::raft::SharedRaft = raft_instance.clone().into();
             async move {
                 tonic::transport::Server::builder()
-                    .add_service(proto::api_service_server::ApiServiceServer::new(raft))
+                    .add_service(proto::api_service_server::ApiServiceServer::new(
+                        RAFT_INSTANCE.get().unwrap(),
+                    ))
                     .serve(api_addr)
                     .await
                     .unwrap();

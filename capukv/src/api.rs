@@ -63,7 +63,7 @@ async fn recv_read(
 }
 
 #[tonic::async_trait]
-impl proto::api_service_server::ApiService for crate::raft::SharedRaft {
+impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
     // id like these to all be macros but macroing gave me some weird lifetime complaint? i dont really understand how
     // maybe some weird macro_rules! interaction with async_trait
 

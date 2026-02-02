@@ -21,19 +21,6 @@ use crate::{
     },
 };
 
-pub(crate) struct SharedRaft(Arc<Raft>);
-impl std::ops::Deref for SharedRaft {
-    type Target = Arc<Raft>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl From<Arc<Raft>> for SharedRaft {
-    fn from(value: Arc<Raft>) -> Self {
-        Self(value)
-    }
-}
-
 pub(crate) struct Raft {
     // message queue
     msg_tx: mpsc::Sender<RaftMessage>,
