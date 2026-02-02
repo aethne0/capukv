@@ -1,9 +1,12 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, OnceLock},
+};
 
 use im::OrdMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 use tokio::{
-    sync::{Mutex, RwLock, mpsc, oneshot},
+    sync::{mpsc, oneshot, Mutex, RwLock},
     time::Instant,
 };
 
@@ -12,8 +15,10 @@ use crate::raft::log::Log;
 pub(crate) struct StateMachine {
     inner: Arc<RwLock<Inner>>,
     tx: mpsc::Sender<u64>,
-    cmd_reply_txs: Arc<Mutex<BTreeMap<u64, oneshot::Sender<proto::WriteResp>>>>,
 }
+
+static CMD_REPLY_TXS: OnceLock<Mutex<BTreeMap<u64, oneshot::Sender<proto::WriteResp>>>> =
+    OnceLock::new();
 
 impl StateMachine {
     #[must_use]
@@ -28,11 +33,8 @@ impl StateMachine {
             prev_snapshot_id: 0,
         }));
 
-        let cmd_reply_txs = Arc::new(Mutex::new(BTreeMap::new()));
-
         tokio::spawn({
             let inner = inner.clone();
-            let cmd_reply_txs = cmd_reply_txs.clone();
             // state machine "worker" that applies commited log entries asynchronously
             let log = log.clone();
             async move {
@@ -46,19 +48,27 @@ impl StateMachine {
                         let last_applied = inner.read().await.last_applied + 1;
 
                         match log.get(last_applied) {
-                            Err(e) => panic!("State machine apply task couldn't read from log - {:?}", e),
+                            Err(e) => {
+                                panic!("State machine apply task couldn't read from log - {:?}", e)
+                            }
 
                             Ok(entry) => {
                                 // If this panics one of the following happened:
                                 //  1. We incorrectly increased our commit-index\/n (our bug)
                                 //  2. We failed to add entries to our log at some point, or in some way\n (our bug)
                                 //  3. We had a persistence error")
-                                let entry = entry.expect("Tried to apply an entry we don't have in our log");
+                                let entry = entry
+                                    .expect("Tried to apply an entry we don't have in our log");
 
                                 tracing::trace!("Applying entry: {}", entry.index);
 
                                 let mut wlock = inner.write().await;
-                                let reply_tx = cmd_reply_txs.lock().await.remove(&entry.index);
+                                let reply_tx = CMD_REPLY_TXS
+                                    .get()
+                                    .unwrap()
+                                    .lock()
+                                    .await
+                                    .remove(&entry.index);
                                 wlock.apply_mutation(entry, reply_tx).await;
                             }
                         }
@@ -67,7 +77,7 @@ impl StateMachine {
             }
         });
 
-        Self { inner, tx, cmd_reply_txs }
+        Self { inner, tx }
     }
 
     pub(crate) async fn commit_index(&self) -> u64 {
@@ -86,15 +96,19 @@ impl StateMachine {
         self.tx.send(commit_index).await.unwrap()
     }
 
-    pub(crate) async fn add_op_reply_tx(&self, index: u64, reply_tx: oneshot::Sender<proto::WriteResp>) {
-        self.cmd_reply_txs.lock().await.insert(index, reply_tx);
+    pub(crate) async fn add_op_reply_tx(
+        &self,
+        index: u64,
+        reply_tx: oneshot::Sender<proto::WriteResp>,
+    ) {
+        CMD_REPLY_TXS.get().unwrap().lock().await.insert(index, reply_tx);
     }
 
     /// To be called on term change - we might have ids that get truncated and rewritten
     /// So other wise we might be a follower but reply to a stale request as if we were still leader
     /// (And probably with/from unrelated data)
     pub(crate) async fn clear_op_reply_txs(&self) {
-        self.cmd_reply_txs.lock().await.clear();
+        CMD_REPLY_TXS.get().unwrap().lock().await.clear();
     }
 
     pub(crate) async fn read_op(&self, read_op: proto::ReadOp) -> proto::ReadResp {
@@ -141,8 +155,17 @@ struct Inner {
 }
 
 impl Inner {
-    async fn apply_mutation(&mut self, entry: proto::LogEntry, reply_tx: Option<oneshot::Sender<proto::WriteResp>>) {
-        tracing::trace!("APPLYING: {} (LA:{} CI:{})", entry.index, self.last_applied, self.commit_index,);
+    async fn apply_mutation(
+        &mut self,
+        entry: proto::LogEntry,
+        reply_tx: Option<oneshot::Sender<proto::WriteResp>>,
+    ) {
+        tracing::trace!(
+            "APPLYING: {} (LA:{} CI:{})",
+            entry.index,
+            self.last_applied,
+            self.commit_index,
+        );
 
         // ya...
         let Some(op) = entry.op else { unreachable!() };
@@ -152,13 +175,21 @@ impl Inner {
             let resp: proto::WriteResp = match op {
                 CreateSnapshotReq(proto::CreateSnapshotReq {}) => {
                     self.prev_snapshot_id += 1;
-                    self.snapshots.insert(self.prev_snapshot_id, Snapshot::new(self.store.clone(), self.last_applied));
-                    proto::CreateSnapshotResp { snapshot: self.prev_snapshot_id }.into()
+                    self.snapshots.insert(
+                        self.prev_snapshot_id,
+                        Snapshot::new(self.store.clone(), self.last_applied),
+                    );
+                    proto::CreateSnapshotResp {
+                        snapshot: self.prev_snapshot_id,
+                    }
+                    .into()
                 }
-                DeleteSnapshotReq(proto::DeleteSnapshotReq { snapshot }) => match self.snapshots.remove(&snapshot) {
-                    Some(_ss) => proto::DeleteSnapshotResp {}.into(),
-                    None => proto::Err::SnapshotNotFound.into(),
-                },
+                DeleteSnapshotReq(proto::DeleteSnapshotReq { snapshot }) => {
+                    match self.snapshots.remove(&snapshot) {
+                        Some(_ss) => proto::DeleteSnapshotResp {}.into(),
+                        None => proto::Err::SnapshotNotFound.into(),
+                    }
+                }
                 PurgeSnapshotsReq(proto::PurgeSnapshotsReq {}) => {
                     let count = self.snapshots.len() as u64;
                     self.snapshots.clear();
@@ -182,10 +213,16 @@ impl Inner {
                     proto::InsertBatchResp { old_pairs }.into()
                 }
 
-                InsertBatchCasReq(proto::InsertBatchCasReq { snapshot, pairs: written_pairs }) => {
+                InsertBatchCasReq(proto::InsertBatchCasReq {
+                    snapshot,
+                    pairs: written_pairs,
+                }) => {
                     match self.snapshots.get(&snapshot) {
                         None => proto::Err::SnapshotNotFound.into(),
-                        Some(ss) => match ss.read_keys.iter().any(|k| ss.store.get(k) != self.store.get(k))
+                        Some(ss) => match ss
+                            .read_keys
+                            .iter()
+                            .any(|k| ss.store.get(k) != self.store.get(k))
                             || written_pairs
                                 .iter()
                                 .map(|proto::Pair { key, .. }| key)
@@ -231,8 +268,11 @@ impl Inner {
                     // Probably have to clone because its immutable, don't think theres a way around this
                     // Normally we could (conceptually) do something like
                     // ks.store.range(..).drain(..)
-                    let to_remove: Vec<Vec<u8>> =
-                        self.store.range(start_key..end_key).map(|(k, _)| k.clone()).collect();
+                    let to_remove: Vec<Vec<u8>> = self
+                        .store
+                        .range(start_key..end_key)
+                        .map(|(k, _)| k.clone())
+                        .collect();
 
                     for k in to_remove {
                         if let Some((key, value)) = self.store.remove_with_key(&k) {
@@ -289,7 +329,10 @@ impl Inner {
                             for key in keys {
                                 if let Some((k, v)) = ss.store.get_key_value(&key) {
                                     ss.read_keys.insert(k.clone());
-                                    pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
+                                    pairs.push(proto::Pair {
+                                        key: k.clone(),
+                                        value: v.clone(),
+                                    });
                                 }
                             }
                             proto::GetBatchResp { pairs }.into()
@@ -299,14 +342,21 @@ impl Inner {
                         let mut pairs = vec![];
                         for key in keys {
                             if let Some((k, v)) = self.store.get_key_value(&key) {
-                                pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
+                                pairs.push(proto::Pair {
+                                    key: k.clone(),
+                                    value: v.clone(),
+                                });
                             }
                         }
                         proto::GetBatchResp { pairs }.into()
                     }
                 },
 
-                GetRangeReq(proto::GetRangeReq { snapshot, start_key, end_key }) => match snapshot {
+                GetRangeReq(proto::GetRangeReq {
+                    snapshot,
+                    start_key,
+                    end_key,
+                }) => match snapshot {
                     Some(requested_ss) => match self.snapshots.get_mut(&requested_ss) {
                         None => proto::Err::SnapshotNotFound.into(),
                         Some(ss) => {
@@ -314,7 +364,10 @@ impl Inner {
 
                             for (k, v) in ss.store.range(start_key..end_key) {
                                 ss.read_keys.insert(k.clone());
-                                pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
+                                pairs.push(proto::Pair {
+                                    key: k.clone(),
+                                    value: v.clone(),
+                                });
                             }
                             proto::GetRangeResp { pairs }.into()
                         }
@@ -324,7 +377,10 @@ impl Inner {
                         let mut pairs = vec![];
 
                         for (k, v) in self.store.range(start_key..end_key) {
-                            pairs.push(proto::Pair { key: k.clone(), value: v.clone() });
+                            pairs.push(proto::Pair {
+                                key: k.clone(),
+                                value: v.clone(),
+                            });
                         }
                         proto::GetRangeResp { pairs }.into()
                     }
