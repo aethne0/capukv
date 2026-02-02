@@ -4,7 +4,6 @@ resolver = "3"
 edition = "2024"
 
 [workspace.dependencies]
-monke = { git = "https://github.com/aethne0/monke-util", branch = "master" }
 prost = "0.14.1"
 tonic = "0.14.2"
 tonic-prost = "0.14.2"

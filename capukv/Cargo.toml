@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 proto = { workspace = true, features = ["server"] }
-monke = { workspace = true }
 
 prost = { workspace = true }
 tonic = { workspace = true }

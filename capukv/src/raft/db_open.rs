@@ -12,7 +12,7 @@ pub(crate) fn open_db(path: &std::path::Path) -> Arc<rocksdb::DB> {
 
     let mut local_opts = rocksdb::Options::default();
     local_opts.set_compression_type(rocksdb::DBCompressionType::None);
-    local_opts.set_write_buffer_size(monke::KiB!(1));
+    local_opts.set_write_buffer_size(0x400);
     local_opts.set_max_background_jobs(0);
     local_opts.increase_parallelism(1);
 
