@@ -83,7 +83,6 @@ impl RaftPeer {
         }
     }
 
-    #[inline]
     pub(crate) fn next_req_id(&self) -> u64 {
         self.req_id.fetch_add(1, std::sync::atomic::Ordering::Release)
     }
@@ -110,7 +109,6 @@ impl RaftPeer {
 
     const INITIAL_LOGS: usize = 3;
     const BACKOFFS: [Duration; 3] = [Duration::from_secs(5), Duration::from_secs(15), Duration::from_secs(60)];
-    #[inline]
     async fn should_log_failure(&self) -> bool {
         let now = Instant::now();
         let mut lock = self.logging_meta.lock().await;

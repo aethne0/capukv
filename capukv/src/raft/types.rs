@@ -107,15 +107,12 @@ impl Display for Role {
 const BASE_HEARTBEAT: f64 = 0.3;
 pub(crate) const MAX_MSG_PER_APPEND_ENTRIES: u64 = 64; // todo by content length
 
-#[inline]
 fn randrange(min: f64, max: f64) -> f64 {
     rand::rng().random_range(min..=max)
 }
-#[inline]
 pub(crate) fn heartbeat_dur() -> Duration {
     Duration::from_secs_f64(BASE_HEARTBEAT)
 }
-#[inline]
 pub(crate) fn election_dur() -> Duration {
     Duration::from_secs_f64(BASE_HEARTBEAT * randrange(4.0, 8.0))
 }

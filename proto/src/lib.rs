@@ -29,7 +29,6 @@ mod server {
         }
     }
 
-    #[inline]
     fn read_uuid_unwrap(b: &Vec<u8>) -> &uuid::Uuid {
         // Doesn't copy, just a uuid typed wrapper
         // Will panic if bytes isnt 16 length - i dont know how this would happen outside
@@ -38,54 +37,45 @@ mod server {
     }
 
     impl AppendEntriesRequest {
-        #[inline]
         pub fn leader_uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.leader_id)
         }
-        #[inline]
         pub fn follower_uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.follower_id)
         }
     }
 
     impl AppendEntriesResponse {
-        #[inline]
         pub fn leader_uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.leader_id)
         }
-        #[inline]
         pub fn follower_uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.follower_id)
         }
     }
 
     impl VoteRequest {
-        #[inline]
         pub fn candidate_uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.candidate_id)
         }
     }
 
     impl VoteResponse {
-        #[inline]
         pub fn from_uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.from_id)
         }
     }
 
     impl LocalEntry {
-        #[inline]
         pub fn voted_for_uuid(&self) -> Option<&uuid::Uuid> {
             match &self.voted_for {
                 Some(b) => Some(read_uuid_unwrap(&b)),
                 None => None,
             }
         }
-        #[inline]
         pub fn uuid(&self) -> &uuid::Uuid {
             read_uuid_unwrap(&self.id)
         }
-        #[inline]
         pub fn peers(&self) -> Vec<(String, uuid::Uuid)> {
             self.peers.iter().map(|p| (p.uri.clone(), read_uuid_unwrap(&p.id).clone())).collect()
         }
