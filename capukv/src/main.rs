@@ -57,7 +57,6 @@ fn main() -> Result<(), capukv::Error> {
     let args = Args::parse();
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
         .enable_all()
         .build()
         .expect("Couldn't initialize runtime");
@@ -125,7 +124,13 @@ fn main() -> Result<(), capukv::Error> {
             }
         };
 
-        capukv::CapuKv::build_and_run(args.dir, args.raft_addr, args.api_addr, peers, args.redirect_uri).await.unwrap();
+        capukv::build_and_run(
+            args.dir,
+            args.raft_addr,
+            args.api_addr,
+            peers,
+            args.redirect_uri
+        ).await.unwrap();
     });
 
     Ok(())

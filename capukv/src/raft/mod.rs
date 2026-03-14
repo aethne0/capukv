@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::{Arc, OnceLock}};
 
 use tokio::sync::{Mutex, mpsc, oneshot};
 
@@ -26,6 +26,8 @@ pub(crate) struct Raft {
     msg_tx: mpsc::Sender<RaftMessage>,
 }
 
+static LOG: OnceLock<Log> = OnceLock::new();
+
 impl Raft {
     #[must_use]
     pub(crate) async fn new(
@@ -34,7 +36,8 @@ impl Raft {
     ) -> Result<Self, crate::Error> {
         let db = open_db(dir);
         let mut persist = Persist::new(db.clone())?;
-        let log = Arc::new(Log::new(db.clone())?);
+
+        let _ = LOG.set(Log::new(db.clone())?);
 
         // bootstrapping, if needed
         // strictly speaking this is not bulletproof, but we can improve later by making it commited into the log etc
@@ -43,7 +46,7 @@ impl Raft {
             bootstrap(peer_uris, raft_addr, &mut persist).await?;
         }
 
-        let state_machine = Arc::new(StateMachine::new(log.clone()));
+        let state_machine = StateMachine::new(LOG.get().unwrap());
 
         tracing::info!("Our ID: {}", fmt_id(&persist.local.uuid()));
         tracing::info!(
@@ -56,7 +59,7 @@ impl Raft {
             )
         );
 
-        let last_log = log.last_index().unwrap();
+        let last_log = LOG.get().unwrap().last_index().unwrap();
         if last_log > 0 {
             tracing::info!("Initializing state machine with {} persisted logs...", last_log);
         }
@@ -71,7 +74,7 @@ impl Raft {
             }
         }
 
-        let mut inner = RaftInner::new(msg_tx.clone(), msg_rx, persist, peers_map, state_machine, log, redirect_uri);
+        let mut inner = RaftInner::new(msg_tx.clone(), msg_rx, persist, peers_map, state_machine, LOG.get().unwrap(), redirect_uri);
 
         tokio::spawn(async move { inner.run().await });
 

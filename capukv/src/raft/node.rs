@@ -48,16 +48,16 @@ pub(crate) struct RaftInner {
     voted_for_by: HashSet<uuid::Uuid>,
 
     persist: Persist,
-    log: Arc<Log>,
+    log: &'static Log,
 
     /// This has to be behind an arc, because the state-machine application is done in another task.
-    state_machine: Arc<StateMachine>,
+    state_machine: StateMachine,
 }
 
 impl RaftInner {
     pub(crate) fn new(
         msg_tx: mpsc::Sender<RaftMessage>, msg_rx: mpsc::Receiver<RaftMessage>, persist: Persist,
-        peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>, state_machine: Arc<StateMachine>, log: Arc<Log>,
+        peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>, state_machine: StateMachine, log: &'static Log,
         redirect_uri: Option<tonic::transport::Uri>,
     ) -> Self {
         Self {
@@ -348,8 +348,8 @@ impl RaftInner {
             Ok((log.term, log.index))
         } else {
             unreachable!(
-                "No log entry at index ({}) found when trying to find prev_log for peer {}, shouldn't happen. 
-                `peer.next_index` should be initialized to the latest entry in our (leader's) log, 
+                "No log entry at index ({}) found when trying to find prev_log for peer {}, shouldn't happen.
+                `peer.next_index` should be initialized to the latest entry in our (leader's) log,
                 so we should obviously have a log at (our_max_log_index - 1)",
                 peer.next_index - 1,
                 fmt_id(&peer.id)
@@ -706,3 +706,4 @@ impl RaftInner {
         Ok(())
     }
 }
+

@@ -22,7 +22,7 @@ static CMD_REPLY_TXS: OnceLock<Mutex<BTreeMap<u64, oneshot::Sender<proto::WriteR
 
 impl StateMachine {
     #[must_use]
-    pub(crate) fn new(log: Arc<Log>) -> Self {
+    pub(crate) fn new(log: &'static Log) -> Self {
         let (tx, mut rx) = mpsc::channel::<u64>(4);
 
         let inner = Arc::new(RwLock::new(Inner {
@@ -36,7 +36,6 @@ impl StateMachine {
         tokio::spawn({
             let inner = inner.clone();
             // state machine "worker" that applies commited log entries asynchronously
-            let log = log.clone();
             async move {
                 while let Some(new_commit_index) = rx.recv().await {
                     {
