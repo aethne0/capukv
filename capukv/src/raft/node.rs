@@ -566,7 +566,7 @@ impl RaftInner {
                             if !self.voted_for_by.contains(response.from_uuid()) {
                                 self.votes_received += 1;
                                 self.voted_for_by.insert(response.from_uuid().clone());
-                                if self.votes_received as usize > (self.peers.len() + 1) / 2 {
+                                if self.votes_received as usize > self.peers.len() / 2 {
                                     self.become_leader().await?;
                                 }
                             }
