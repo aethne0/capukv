@@ -1,6 +1,11 @@
-use std::{collections::HashMap, net::SocketAddr, sync::{Arc, OnceLock}};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 mod bootstrap;
 mod db_open;
@@ -12,14 +17,16 @@ mod timer;
 mod transport;
 mod types;
 
-use crate::{
-    err::RaftResponseError,
-    fmt_id,
-    raft::{
-        bootstrap::bootstrap, db_open::open_db, log::Log, node::RaftInner, persist::Persist,
-        state_machine::StateMachine, transport::RaftPeer, types::RaftMessage,
-    },
-};
+use crate::err::RaftResponseError;
+use crate::fmt_id;
+use crate::raft::bootstrap::bootstrap;
+use crate::raft::db_open::open_db;
+use crate::raft::log::Log;
+use crate::raft::node::RaftInner;
+use crate::raft::persist::Persist;
+use crate::raft::state_machine::StateMachine;
+use crate::raft::transport::RaftPeer;
+use crate::raft::types::RaftMessage;
 
 pub(crate) struct Raft {
     // message queue
@@ -55,7 +62,10 @@ impl Raft {
                 "Starting with: id: {}, term: {}, voted_for: {}",
                 persist.local.uuid().as_hyphenated(),
                 persist.local.term,
-                persist.local.voted_for_uuid().map_or("None".to_string(), |u| u.as_hyphenated().to_string())
+                persist
+                    .local
+                    .voted_for_uuid()
+                    .map_or("None".to_string(), |u| u.as_hyphenated().to_string())
             )
         );
 
@@ -74,7 +84,15 @@ impl Raft {
             }
         }
 
-        let mut inner = RaftInner::new(msg_tx.clone(), msg_rx, persist, peers_map, state_machine, LOG.get().unwrap(), redirect_uri);
+        let mut inner = RaftInner::new(
+            msg_tx.clone(),
+            msg_rx,
+            persist,
+            peers_map,
+            state_machine,
+            LOG.get().unwrap(),
+            redirect_uri,
+        );
 
         tokio::spawn(async move { inner.run().await });
 
@@ -86,12 +104,9 @@ impl Raft {
         &self, req: proto::VoteRequest,
     ) -> Result<oneshot::Receiver<proto::VoteResponse>, crate::Error> {
         let (tx, rx) = oneshot::channel();
-        if let Err(e) = self
-            .msg_tx
-            .send(RaftMessage::RequestVote(req, tx))
-            .await
-            .map_err(|e| crate::Error::Raft(format!("Raft core [request-vote] error: {}", e.to_string())))
-        {
+        if let Err(e) = self.msg_tx.send(RaftMessage::RequestVote(req, tx)).await.map_err(|e| {
+            crate::Error::Raft(format!("Raft core [request-vote] error: {}", e.to_string()))
+        }) {
             panic!("Raft msg-channel closed | {:?}", e);
         }
         Ok(rx)
@@ -102,12 +117,9 @@ impl Raft {
         &self, req: proto::AppendEntriesRequest,
     ) -> Result<oneshot::Receiver<proto::AppendEntriesResponse>, crate::Error> {
         let (tx, rx) = oneshot::channel();
-        if let Err(e) = self
-            .msg_tx
-            .send(RaftMessage::AppendEntries(req, tx))
-            .await
-            .map_err(|e| crate::Error::Raft(format!("Raft core [append-entries] error: {}", e.to_string())))
-        {
+        if let Err(e) = self.msg_tx.send(RaftMessage::AppendEntries(req, tx)).await.map_err(|e| {
+            crate::Error::Raft(format!("Raft core [append-entries] error: {}", e.to_string()))
+        }) {
             panic!("Raft msg-channel closed | {:?}", e);
         }
         Ok(rx)
@@ -119,11 +131,10 @@ impl Raft {
     ) -> Result<proto::WriteResp, RaftResponseError> {
         tracing::debug!("WriteOp: {:?}", &write_op);
         let (tx, rx) = oneshot::channel();
-        if let Err(e) = self
-            .msg_tx
-            .send(RaftMessage::SubmitWriteReq(write_op, tx))
-            .await
-            .map_err(|e| crate::Error::Raft(format!("Raft core [submit-write] error: {}", e.to_string())))
+        if let Err(e) =
+            self.msg_tx.send(RaftMessage::SubmitWriteReq(write_op, tx)).await.map_err(|e| {
+                crate::Error::Raft(format!("Raft core [submit-write] error: {}", e.to_string()))
+            })
         {
             panic!("Raft msg-channel closed | {:?}", e);
         }
@@ -133,14 +144,15 @@ impl Raft {
     }
 
     /// Client linear read
-    pub(crate) async fn submit_read_op(&self, read_op: proto::ReadOp) -> Result<proto::ReadResp, RaftResponseError> {
+    pub(crate) async fn submit_read_op(
+        &self, read_op: proto::ReadOp,
+    ) -> Result<proto::ReadResp, RaftResponseError> {
         tracing::debug!("ReadOp: {:?}", &read_op);
         let (tx, rx) = oneshot::channel();
-        if let Err(e) = self
-            .msg_tx
-            .send(RaftMessage::SubmitReadReq(read_op, tx))
-            .await
-            .map_err(|e| crate::Error::Raft(format!("Raft core [submit-read] error: {}", e.to_string())))
+        if let Err(e) =
+            self.msg_tx.send(RaftMessage::SubmitReadReq(read_op, tx)).await.map_err(|e| {
+                crate::Error::Raft(format!("Raft core [submit-read] error: {}", e.to_string()))
+            })
         {
             panic!("Raft msg-channel closed | {:?}", e);
         }

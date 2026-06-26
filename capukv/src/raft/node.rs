@@ -1,24 +1,26 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
 
-use tokio::sync::{Mutex, MutexGuard, mpsc, oneshot};
+use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
-use crate::{
-    fmt_id,
-    raft::{
-        RaftResponseError,
-        log::Log,
-        persist::Persist,
-        state_machine::StateMachine,
-        timer::Timer,
-        transport::RaftPeer,
-        types::{MAX_MSG_PER_APPEND_ENTRIES, RaftMessage, Role, election_dur, heartbeat_dur},
-    },
-};
+use crate::fmt_id;
+use crate::raft::RaftResponseError;
+use crate::raft::log::Log;
+use crate::raft::persist::Persist;
+use crate::raft::state_machine::StateMachine;
+use crate::raft::timer::Timer;
+use crate::raft::transport::RaftPeer;
+use crate::raft::types::MAX_MSG_PER_APPEND_ENTRIES;
+use crate::raft::types::RaftMessage;
+use crate::raft::types::Role;
+use crate::raft::types::election_dur;
+use crate::raft::types::heartbeat_dur;
 
 /// RaftInner "owns itself" and can only be interacted with via sending RaftMessages via channels
 pub(crate) struct RaftInner {
@@ -31,24 +33,24 @@ pub(crate) struct RaftInner {
     ///
     /// No need for this to be shared (arc etc) because it only will be changed by raft-msg handlers,
     /// which are processed serially.
-    peers: HashMap<Uuid, Arc<Mutex<RaftPeer>>>,
+    peers:            HashMap<Uuid, Arc<Mutex<RaftPeer>>>,
     /// Our frontend uri
-    redirect_uri: Option<tonic::transport::Uri>,
+    redirect_uri:     Option<tonic::transport::Uri>,
     /// current leaders uri, to the best of our knowledge
-    leader_api_uri: Option<String>, // uri
+    leader_api_uri:   Option<String>, // uri
     leader_client_id: Option<Uuid>, // id
 
     election_timer: Option<Timer>,
 
-    role: Role,
+    role:           Role,
     // todo remove (just use [voted_for_by])
     votes_received: usize,
     /// Keeps track fo who voted for us, so duplicate messages dont make us count a vote from the same node
     /// twice
-    voted_for_by: HashSet<uuid::Uuid>,
+    voted_for_by:   HashSet<uuid::Uuid>,
 
     persist: Persist,
-    log: &'static Log,
+    log:     &'static Log,
 
     /// This has to be behind an arc, because the state-machine application is done in another task.
     state_machine: StateMachine,
@@ -128,7 +130,11 @@ impl RaftInner {
 
     /// Can become leader instead if we are the only one in the cluster
     async fn become_candidate(&mut self) -> Result<(), crate::Error> {
-        assert_ne!(self.role, Role::Leader, "Invalid transition, must be (Follower | Candidate) -> (Candidate)");
+        assert_ne!(
+            self.role,
+            Role::Leader,
+            "Invalid transition, must be (Follower | Candidate) -> (Candidate)"
+        );
 
         for (_, peer) in self.peers.iter() {
             peer.lock().await.heartbeat_timer = None;
@@ -155,7 +161,11 @@ impl RaftInner {
     }
 
     async fn become_leader(&mut self) -> Result<(), crate::Error> {
-        assert_eq!(self.role, Role::Candidate, "Invalid transition, must be: (Candidate) -> (Leader)");
+        assert_eq!(
+            self.role,
+            Role::Candidate,
+            "Invalid transition, must be: (Candidate) -> (Leader)"
+        );
 
         for (_, peer) in self.peers.iter() {
             peer.lock().await.heartbeat_timer = None;
@@ -210,7 +220,11 @@ impl RaftInner {
         assert_eq!(self.role, Role::Leader, "append to logs AS LEADER");
         let (tx, rx) = oneshot::channel();
 
-        let entry = proto::LogEntry { op: Some(op), term: self.persist.local.term, index: self.log.last_index()? + 1 };
+        let entry = proto::LogEntry {
+            op:    Some(op),
+            term:  self.persist.local.term,
+            index: self.log.last_index()? + 1,
+        };
         let index = entry.index;
 
         self.log.insert(&entry)?;
@@ -220,7 +234,9 @@ impl RaftInner {
     }
 
     /// Should only be called as follower when receiving non-empty append-entries from leader.
-    async fn add_logs_as_follower(&self, mut entries: Vec<proto::LogEntry>) -> Result<(), crate::Error> {
+    async fn add_logs_as_follower(
+        &self, mut entries: Vec<proto::LogEntry>,
+    ) -> Result<(), crate::Error> {
         assert_eq!(self.role, Role::Follower, "add to logs AS FOLLOWER");
         assert!(!entries.is_empty());
         // Careful here!
@@ -230,7 +246,8 @@ impl RaftInner {
         // 4.   Append any new entries not already in the log
         let mut truncated = false;
         for entry in entries.drain(..) {
-            if !truncated && self.log.get(entry.index)?.map_or(false, |log| log.term != entry.term) {
+            if !truncated && self.log.get(entry.index)?.map_or(false, |log| log.term != entry.term)
+            {
                 self.log.truncate(entry.index).await?;
                 truncated = true; // so we dont keep rechecking
             }
@@ -242,7 +259,9 @@ impl RaftInner {
     }
 
     /// This is the ONLY way appendEntries is sent
-    async fn send_append_entries(&self, mut peer: MutexGuard<'_, RaftPeer>) -> Result<(), crate::Error> {
+    async fn send_append_entries(
+        &self, mut peer: MutexGuard<'_, RaftPeer>,
+    ) -> Result<(), crate::Error> {
         assert_eq!(self.role, Role::Leader, "Should only send append-entries as leader");
         let commit_index = self.state_machine.commit_index().await;
 
@@ -252,7 +271,9 @@ impl RaftInner {
             Some(in_flight_req) => in_flight_req.clone(),
 
             None => {
-                let entries = self.log.get_range(peer.next_index, peer.next_index + MAX_MSG_PER_APPEND_ENTRIES)?;
+                let entries = self
+                    .log
+                    .get_range(peer.next_index, peer.next_index + MAX_MSG_PER_APPEND_ENTRIES)?;
 
                 let req = proto::AppendEntriesRequest {
                     req_id: peer.next_req_id(),
@@ -385,7 +406,10 @@ impl RaftInner {
                     // * if rpc req/resp has higher term than ours, convert to follower with newer term
                     if request.term > self.persist.local.term {
                         self.become_follower(request.term).await?;
-                        self.update_known_leader(Some((request.leader_api_uri.clone(), request.leader_uuid().clone())));
+                        self.update_known_leader(Some((
+                            request.leader_api_uri.clone(),
+                            request.leader_uuid().clone(),
+                        )));
                     }
 
                     // If we get a rpc from a "new leader" (which could have our same term) we step down
@@ -393,7 +417,10 @@ impl RaftInner {
                         && request.term >= self.persist.local.term
                     {
                         self.become_follower(request.term).await?;
-                        self.update_known_leader(Some((request.leader_api_uri.clone(), request.leader_uuid().clone())));
+                        self.update_known_leader(Some((
+                            request.leader_api_uri.clone(),
+                            request.leader_uuid().clone(),
+                        )));
                     }
 
                     // now we can just handle the request if we are follower, otherwise ignore
@@ -421,15 +448,19 @@ impl RaftInner {
                                 proto::AppendEntriesResponse::from((&request, term, false))
                             } else if !request.entries.is_empty() {
                                 let last_index_received = request.entries.last().unwrap().index;
-                                let new_commit_index = request.leader_commit.min(last_index_received);
+                                let new_commit_index =
+                                    request.leader_commit.min(last_index_received);
                                 // construct here so we can move into add_logs_as_follower
-                                let resp = proto::AppendEntriesResponse::from((&request, term, true));
+                                let resp =
+                                    proto::AppendEntriesResponse::from((&request, term, true));
                                 self.add_logs_as_follower(request.entries).await?;
                                 self.state_machine.set_commit_index(new_commit_index).await;
                                 resp
                             } else {
                                 self.state_machine
-                                    .set_commit_index(request.leader_commit.min(request.prev_log_index))
+                                    .set_commit_index(
+                                        request.leader_commit.min(request.prev_log_index),
+                                    )
                                     .await;
                                 proto::AppendEntriesResponse::from((&request, term, true))
                             }
@@ -480,7 +511,8 @@ impl RaftInner {
 
                         if response.success {
                             if response.entries_len > 0 {
-                                peer_lock.next_index = response.first_entry_index + response.entries_len;
+                                peer_lock.next_index =
+                                    response.first_entry_index + response.entries_len;
                                 peer_lock.match_index = peer_lock.next_index - 1;
                                 drop(peer_lock);
                                 self.maybe_commit().await?;
@@ -522,9 +554,10 @@ impl RaftInner {
                                 proto::VoteResponse { req_id, term, vote_granted: false, from_id }
                             } else if !(self.persist.local.voted_for.clone())
                                 .is_some_and(|id| id != request.candidate_id)
-                                && self
-                                    .log
-                                    .candidates_log_up_to_date((request.last_log_term, request.last_log_index))?
+                                && self.log.candidates_log_up_to_date((
+                                    request.last_log_term,
+                                    request.last_log_index,
+                                ))?
                             {
                                 // if we havent voted, or voted for them, and their logs are
                                 // at least as up to date as ours
@@ -532,7 +565,12 @@ impl RaftInner {
                                 self.persist.save()?;
 
                                 self.new_election_timer();
-                                proto::VoteResponse { req_id, term: request.term, vote_granted: true, from_id }
+                                proto::VoteResponse {
+                                    req_id,
+                                    term: request.term,
+                                    vote_granted: true,
+                                    from_id,
+                                }
                             } else {
                                 proto::VoteResponse { req_id, term, vote_granted: false, from_id }
                             }
@@ -601,7 +639,8 @@ impl RaftInner {
                                                 candidate_id: id,
                                                 last_log_index,
                                                 last_log_term,
-                                                leader_api_uri: leader_api_uri.map(|v| v.to_string()),
+                                                leader_api_uri: leader_api_uri
+                                                    .map(|v| v.to_string()),
                                             },
                                             tx,
                                         )
@@ -625,8 +664,12 @@ impl RaftInner {
 
                 RaftMessage::HeartbeatTimeout(id) => {
                     if self.role == Role::Leader {
-                        let peer =
-                            self.peers.get(&id).expect(&format!("Peer not found for id? {}", fmt_id(&id))).lock().await;
+                        let peer = self
+                            .peers
+                            .get(&id)
+                            .expect(&format!("Peer not found for id? {}", fmt_id(&id)))
+                            .lock()
+                            .await;
                         self.send_append_entries(peer).await?;
                     } else {
                         // todo - this is a bit of a race condition where we can:
@@ -658,7 +701,8 @@ impl RaftInner {
                     match self.role {
                         Role::Leader => {
                             // log mutation
-                            let (received_log_index, reply_rx) = self.submit_write_op_as_leader(write_op).await?;
+                            let (received_log_index, reply_rx) =
+                                self.submit_write_op_as_leader(write_op).await?;
 
                             for (_, peer_client) in self.peers.iter() {
                                 // i think this check is imfallible
@@ -678,15 +722,18 @@ impl RaftInner {
                             }
 
                             tokio::spawn(async move {
-                                let resp =
-                                    if let Ok(rcv) = tokio::time::timeout(Duration::from_secs(10), reply_rx).await {
-                                        match rcv {
-                                            Err(e) => Err(RaftResponseError::Fail { msg: e.to_string() }),
-                                            Ok(client_resp) => Ok(client_resp),
+                                let resp = if let Ok(rcv) =
+                                    tokio::time::timeout(Duration::from_secs(10), reply_rx).await
+                                {
+                                    match rcv {
+                                        Err(e) => {
+                                            Err(RaftResponseError::Fail { msg: e.to_string() })
                                         }
-                                    } else {
-                                        Err(RaftResponseError::Timeout)
-                                    };
+                                        Ok(client_resp) => Ok(client_resp),
+                                    }
+                                } else {
+                                    Err(RaftResponseError::Timeout)
+                                };
 
                                 let _ = reply_tx.send(resp);
                             });
@@ -706,4 +753,3 @@ impl RaftInner {
         Ok(())
     }
 }
-

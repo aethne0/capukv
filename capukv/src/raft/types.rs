@@ -1,12 +1,12 @@
-use std::{
-    fmt::{Debug, Display},
-    time::Duration,
-};
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::time::Duration;
 
 use rand::Rng;
 use tokio::sync::oneshot;
 
-use crate::{fmt_id, raft::RaftResponseError};
+use crate::fmt_id;
+use crate::raft::RaftResponseError;
 
 #[derive(Debug)]
 pub(crate) enum RaftMessage {

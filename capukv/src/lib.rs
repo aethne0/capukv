@@ -2,11 +2,9 @@ mod api;
 mod err;
 mod raft;
 
-use std::{
-    net::SocketAddr,
-    path::PathBuf,
-    sync::{OnceLock},
-};
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::OnceLock;
 
 pub use err::Error;
 
@@ -14,7 +12,7 @@ use crate::raft::Raft;
 
 pub struct ArgPeer {
     pub uri: String,
-    pub id: uuid::Uuid,
+    pub id:  uuid::Uuid,
 }
 
 pub(crate) fn fmt_id(uuid: &uuid::Uuid) -> String {
@@ -25,11 +23,8 @@ static RAFT_INSTANCE: OnceLock<Raft> = OnceLock::new();
 
 #[must_use]
 pub async fn build_and_run(
-    dir: PathBuf,
-    raft_addr: SocketAddr,
-    api_addr: SocketAddr,
-    peer_uris: Vec<tonic::transport::Uri>,
-    redirect_uri: Option<tonic::transport::Uri>,
+    dir: PathBuf, raft_addr: SocketAddr, api_addr: SocketAddr,
+    peer_uris: Vec<tonic::transport::Uri>, redirect_uri: Option<tonic::transport::Uri>,
 ) -> Result<(), crate::Error> {
     let _ = RAFT_INSTANCE.set(Raft::new(&dir, raft_addr, peer_uris, redirect_uri).await?);
 

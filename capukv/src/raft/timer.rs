@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use tokio::{sync::oneshot, time::Instant};
+use tokio::sync::oneshot;
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub(crate) struct Timer {

@@ -1,9 +1,15 @@
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::Parser;
-use hickory_resolver::{IntoName, Resolver};
+use hickory_resolver::IntoName;
+use hickory_resolver::Resolver;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{filter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::filter;
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -40,15 +46,18 @@ struct Args {
 
 #[cfg(debug_assertions)]
 fn init_logging() {
-    let filter =
-        filter::Targets::new().with_default(LevelFilter::OFF).with_targets(vec![("capukv", LevelFilter::DEBUG)]);
-    let fmt_layer = fmt::layer().with_file(true).with_line_number(true).with_target(false).with_ansi(true);
+    let filter = filter::Targets::new()
+        .with_default(LevelFilter::OFF)
+        .with_targets(vec![("capukv", LevelFilter::DEBUG)]);
+    let fmt_layer =
+        fmt::layer().with_file(true).with_line_number(true).with_target(false).with_ansi(true);
     tracing_subscriber::registry().with(fmt_layer).with(filter).init();
 }
 #[cfg(not(debug_assertions))]
 fn init_logging() {
-    let filter =
-        filter::Targets::new().with_default(LevelFilter::OFF).with_targets(vec![("capukv", LevelFilter::INFO)]);
+    let filter = filter::Targets::new()
+        .with_default(LevelFilter::OFF)
+        .with_targets(vec![("capukv", LevelFilter::INFO)]);
     let fmt_layer = fmt::layer().with_file(false).with_line_number(false).with_target(false);
     tracing_subscriber::registry().with(fmt_layer).with(filter).init();
 }
@@ -114,7 +123,13 @@ fn main() -> Result<(), capukv::Error> {
                 }
 
                 let expect = args.expect.expect("--expect");
-                tracing::info!("DISCOVERY: DNS {} found {}/{}: {:?}", dns, peers.len(), expect, peers);
+                tracing::info!(
+                    "DISCOVERY: DNS {} found {}/{}: {:?}",
+                    dns,
+                    peers.len(),
+                    expect,
+                    peers
+                );
                 if peers.len() == expect {
                     break peers;
                 } else {
@@ -124,13 +139,9 @@ fn main() -> Result<(), capukv::Error> {
             }
         };
 
-        capukv::build_and_run(
-            args.dir,
-            args.raft_addr,
-            args.api_addr,
-            peers,
-            args.redirect_uri
-        ).await.unwrap();
+        capukv::build_and_run(args.dir, args.raft_addr, args.api_addr, peers, args.redirect_uri)
+            .await
+            .unwrap();
     });
 
     Ok(())

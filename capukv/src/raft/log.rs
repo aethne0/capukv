@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use prost::Message;
 use rust_rocksdb as rocksdb;
-use rust_rocksdb::{Direction, IteratorMode};
+use rust_rocksdb::Direction;
+use rust_rocksdb::IteratorMode;
 
 use proto::LogEntry;
 
@@ -26,7 +27,9 @@ impl Log {
         Ok(Log { db })
     }
 
-    pub(crate) fn candidates_log_up_to_date(&self, theirs: (u64, u64)) -> Result<bool, crate::Error> {
+    pub(crate) fn candidates_log_up_to_date(
+        &self, theirs: (u64, u64),
+    ) -> Result<bool, crate::Error> {
         Ok(theirs >= self.last_log_term_index()?)
     }
 
@@ -58,7 +61,8 @@ impl Log {
         let mut collection = vec![];
 
         let handle = self.db.cf_handle(LOG_HANDLE_NAME).unwrap();
-        let mut iter = self.db.iterator_cf(handle, IteratorMode::From(&ser_key(index), Direction::Forward));
+        let mut iter =
+            self.db.iterator_cf(handle, IteratorMode::From(&ser_key(index), Direction::Forward));
 
         while let Some(Ok(entry)) = iter.next() {
             collection.push(LogEntry::decode(&entry.1 as &[u8])?);
@@ -68,11 +72,15 @@ impl Log {
     }
 
     /// range of logs including start, excluding end like: `logs[start..end]`
-    pub(crate) fn get_range(&self, start_index: u64, end_index: u64) -> Result<Vec<LogEntry>, crate::Error> {
+    pub(crate) fn get_range(
+        &self, start_index: u64, end_index: u64,
+    ) -> Result<Vec<LogEntry>, crate::Error> {
         let mut collection = vec![];
 
         let handle = self.db.cf_handle(LOG_HANDLE_NAME).unwrap();
-        let mut iter = self.db.iterator_cf(handle, IteratorMode::From(&ser_key(start_index), Direction::Forward));
+        let mut iter = self
+            .db
+            .iterator_cf(handle, IteratorMode::From(&ser_key(start_index), Direction::Forward));
 
         while let Some(Ok((k, v))) = iter.next() {
             if k >= ser_key(end_index).into() {
@@ -97,7 +105,9 @@ impl Log {
 
         let mut keys = vec![];
 
-        let mut iter = self.db.iterator_cf(handle, IteratorMode::From(&ser_key(last_index), Direction::Forward));
+        let mut iter = self
+            .db
+            .iterator_cf(handle, IteratorMode::From(&ser_key(last_index), Direction::Forward));
         while let Some(Ok((k, _))) = iter.next() {
             keys.push(k);
         }

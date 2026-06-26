@@ -11,20 +11,27 @@
 ///
 /// This is definitely not totally foolproof, but is acceptable for now as its just a one-time thing.
 /// Can improve in the future (especially when cluster-membership-change support added to the raft section)
-use std::{collections::HashSet, net::SocketAddr, time::Duration};
+use std::collections::HashSet;
+use std::net::SocketAddr;
+use std::time::Duration;
 
-use tonic::{Request, Response, Result};
+use tonic::Request;
+use tonic::Response;
+use tonic::Result;
 
-use crate::{fmt_id, raft};
+use crate::fmt_id;
+use crate::raft;
 pub(crate) struct Bootstrapper {
-    pub(crate) id: Vec<u8>,
+    pub(crate) id:         Vec<u8>,
     /// A uuid (bytes)
     pub(crate) heard_from: tokio::sync::mpsc::Sender<Vec<u8>>,
 }
 
 #[tonic::async_trait]
 impl proto::init_service_server::InitService for Bootstrapper {
-    async fn greet(&self, req: Request<proto::GreetRequest>) -> Result<Response<proto::GreetResponse>> {
+    async fn greet(
+        &self, req: Request<proto::GreetRequest>,
+    ) -> Result<Response<proto::GreetResponse>> {
         let (_, _, req) = req.into_parts();
         self.heard_from.send(req.id).await.expect("Error sending on bootstrapping channel");
         Ok(proto::GreetResponse { id: self.id.clone() }.into())
@@ -44,12 +51,18 @@ pub(crate) async fn bootstrap(
 
     let server_handle = tokio::spawn(async move {
         tonic::transport::Server::builder()
-            .add_service(proto::init_service_server::InitServiceServer::new(Bootstrapper { id, heard_from: tx }))
+            .add_service(proto::init_service_server::InitServiceServer::new(Bootstrapper {
+                id,
+                heard_from: tx,
+            }))
             .serve_with_shutdown(raft_addr, async move {
                 let _ = shutdown_rx.await;
             })
             .await
-            .expect(&format!("Couldn't start cluster bootstrapping gRPC server on {} (raft-addr)", raft_addr))
+            .expect(&format!(
+                "Couldn't start cluster bootstrapping gRPC server on {} (raft-addr)",
+                raft_addr
+            ))
     });
 
     for uri_outer in peer_uris.drain(..) {
@@ -64,12 +77,16 @@ pub(crate) async fn bootstrap(
                     match {
                         async {
                             let res = tokio::time::timeout(Duration::from_secs(2), async move {
-                                proto::init_service_client::InitServiceClient::connect(uri.clone()).await
+                                proto::init_service_client::InitServiceClient::connect(uri.clone())
+                                    .await
                             })
                             .await
                             .map_err(|e| e.to_string())?;
                             let mut client = res.map_err(|e| e.to_string())?;
-                            let res = client.greet(proto::GreetRequest { id }).await.map_err(|e| e.to_string())?;
+                            let res = client
+                                .greet(proto::GreetRequest { id })
+                                .await
+                                .map_err(|e| e.to_string())?;
                             Ok::<Vec<u8>, String>(res.into_inner().id)
                         }
                         .await
@@ -103,7 +120,10 @@ pub(crate) async fn bootstrap(
     }
 
     while let Some(rcvd) = rx.recv().await {
-        tracing::info!("BOOTSTRAPPING: Heard from peer {}", fmt_id(&uuid::Uuid::from_slice(&rcvd).unwrap()));
+        tracing::info!(
+            "BOOTSTRAPPING: Heard from peer {}",
+            fmt_id(&uuid::Uuid::from_slice(&rcvd).unwrap())
+        );
         heard_from.insert(rcvd);
         if heard_from.len() == expected {
             // everyone has pinged us, so we can close server

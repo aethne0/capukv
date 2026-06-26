@@ -18,18 +18,24 @@
 impl From<crate::err::RaftResponseError> for tonic::Status {
     fn from(value: crate::err::RaftResponseError) -> Self {
         match value {
-            crate::err::RaftResponseError::Fail { msg } => tonic::Status::internal(format!("{}", msg)),
+            crate::err::RaftResponseError::Fail { msg } => {
+                tonic::Status::internal(format!("{}", msg))
+            }
             // todo leader messaging
-            crate::err::RaftResponseError::NotLeader { uri } => tonic::Status::failed_precondition(format!("{}", uri)),
+            crate::err::RaftResponseError::NotLeader { uri } => {
+                tonic::Status::failed_precondition(format!("{}", uri))
+            }
             crate::err::RaftResponseError::NotReady => {
                 tonic::Status::unavailable("Leader unknown OR no majority".to_string())
             }
             // todo probably wrong code for this
-            crate::err::RaftResponseError::Timeout => tonic::Status::deadline_exceeded("Timed out".to_string()),
-            // todo i think this neccessarily means the operation did not happen, check
-            crate::err::RaftResponseError::OperationCancelled => {
-                tonic::Status::unavailable("Operation cancelled - node turned into follower or something")
+            crate::err::RaftResponseError::Timeout => {
+                tonic::Status::deadline_exceeded("Timed out".to_string())
             }
+            // todo i think this neccessarily means the operation did not happen, check
+            crate::err::RaftResponseError::OperationCancelled => tonic::Status::unavailable(
+                "Operation cancelled - node turned into follower or something",
+            ),
         }
     }
 }
@@ -43,7 +49,9 @@ async fn recv_write(
         Err(e) => Err(e.into()),
         Ok(val) => match val.write_resp.unwrap() {
             proto::write_resp::WriteResp::Ok(val) => Ok(val.write_ok.unwrap()),
-            proto::write_resp::WriteResp::Err(err) => Err(proto::Err::try_from(err).unwrap().into()),
+            proto::write_resp::WriteResp::Err(err) => {
+                Err(proto::Err::try_from(err).unwrap().into())
+            }
         },
     }
 }
@@ -67,7 +75,9 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
     // id like these to all be macros but macroing gave me some weird lifetime complaint? i dont really understand how
     // maybe some weird macro_rules! interaction with async_trait
 
-    async fn get(&self, req: tonic::Request<proto::GetReq>) -> tonic::Result<tonic::Response<proto::GetResp>> {
+    async fn get(
+        &self, req: tonic::Request<proto::GetReq>,
+    ) -> tonic::Result<tonic::Response<proto::GetResp>> {
         let (_, _, req) = req.into_parts();
         let res: proto::GetResp = recv_read(self.submit_read_op(req.into())).await?.into();
         Ok(res.into())
@@ -93,7 +103,8 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::ListSnapshotsReq>,
     ) -> tonic::Result<tonic::Response<proto::ListSnapshotsResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::ListSnapshotsResp = recv_read(self.submit_read_op(req.into())).await?.into();
+        let res: proto::ListSnapshotsResp =
+            recv_read(self.submit_read_op(req.into())).await?.into();
         Ok(res.into())
     }
 
@@ -101,7 +112,8 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::CreateSnapshotReq>,
     ) -> tonic::Result<tonic::Response<proto::CreateSnapshotResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::CreateSnapshotResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::CreateSnapshotResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
@@ -109,7 +121,8 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::DeleteSnapshotReq>,
     ) -> tonic::Result<tonic::Response<proto::DeleteSnapshotResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::DeleteSnapshotResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::DeleteSnapshotResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
@@ -117,11 +130,14 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::PurgeSnapshotsReq>,
     ) -> tonic::Result<tonic::Response<proto::PurgeSnapshotsResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::PurgeSnapshotsResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::PurgeSnapshotsResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
-    async fn insert(&self, req: tonic::Request<proto::InsertReq>) -> tonic::Result<tonic::Response<proto::InsertResp>> {
+    async fn insert(
+        &self, req: tonic::Request<proto::InsertReq>,
+    ) -> tonic::Result<tonic::Response<proto::InsertResp>> {
         let (_, _, req) = req.into_parts();
         let res: proto::InsertResp = recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
@@ -131,7 +147,8 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::InsertBatchReq>,
     ) -> tonic::Result<tonic::Response<proto::InsertBatchResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::InsertBatchResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::InsertBatchResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
@@ -139,11 +156,14 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::InsertBatchCasReq>,
     ) -> tonic::Result<tonic::Response<proto::InsertBatchCasResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::InsertBatchCasResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::InsertBatchCasResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
-    async fn delete(&self, req: tonic::Request<proto::DeleteReq>) -> tonic::Result<tonic::Response<proto::DeleteResp>> {
+    async fn delete(
+        &self, req: tonic::Request<proto::DeleteReq>,
+    ) -> tonic::Result<tonic::Response<proto::DeleteResp>> {
         let (_, _, req) = req.into_parts();
         let res: proto::DeleteResp = recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
@@ -153,7 +173,8 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::DeleteRangeReq>,
     ) -> tonic::Result<tonic::Response<proto::DeleteRangeResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::DeleteRangeResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::DeleteRangeResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
@@ -161,7 +182,8 @@ impl proto::api_service_server::ApiService for &'static crate::raft::Raft {
         &self, req: tonic::Request<proto::DeleteBatchReq>,
     ) -> tonic::Result<tonic::Response<proto::DeleteBatchResp>> {
         let (_, _, req) = req.into_parts();
-        let res: proto::DeleteBatchResp = recv_write(self.submit_write_op(req.into())).await?.into();
+        let res: proto::DeleteBatchResp =
+            recv_write(self.submit_write_op(req.into())).await?.into();
         Ok(res.into())
     }
 
