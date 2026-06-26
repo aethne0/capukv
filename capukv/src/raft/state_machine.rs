@@ -33,6 +33,8 @@ impl StateMachine {
             prev_snapshot_id: 0,
         }));
 
+        CMD_REPLY_TXS.set(Mutex::new(BTreeMap::new())).unwrap();
+
         tokio::spawn({
             let inner = inner.clone();
             // state machine "worker" that applies commited log entries asynchronously
@@ -100,7 +102,12 @@ impl StateMachine {
         index: u64,
         reply_tx: oneshot::Sender<proto::WriteResp>,
     ) {
-        CMD_REPLY_TXS.get().unwrap().lock().await.insert(index, reply_tx);
+        CMD_REPLY_TXS
+            .get()
+            .unwrap()
+            .lock()
+            .await
+            .insert(index, reply_tx);
     }
 
     /// To be called on term change - we might have ids that get truncated and rewritten
